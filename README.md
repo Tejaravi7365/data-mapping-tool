@@ -7,6 +7,9 @@ This backend service generates a data mapping sheet between:
 - **Source**: Salesforce object metadata
 - **Target**: Amazon Redshift table metadata
 
+  <img width="1069" height="627" alt="image" src="https://github.com/user-attachments/assets/c68f80cf-dcd2-4550-9f7c-2b79b3e69d4a" />
+
+
 It exposes a FastAPI endpoint that:
 
 - Connects to Salesforce and Redshift
