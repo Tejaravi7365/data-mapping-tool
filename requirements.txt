@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+simple-salesforce
+psycopg2-binary
+pandas
+openpyxl
+pydantic
+jinja2
+python-multipart
