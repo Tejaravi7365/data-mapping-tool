@@ -45,3 +45,6 @@ mapping_sheet.xlsx
 # Environment variables
 .env
 .env.local
+
+# Nested git repositories
+data-mapping/
