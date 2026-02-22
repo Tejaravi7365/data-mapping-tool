@@ -16,6 +16,12 @@ Supported platforms:
 - **Source**: Salesforce, MSSQL (SQL Server), MySQL
 - **Target**: Amazon Redshift, MSSQL (SQL Server), MySQL
 
+<img width="755" height="398" alt="image" src="https://github.com/user-attachments/assets/f164bed5-2dfd-4371-9a49-98d7a0a8c125" />
+
+<img width="764" height="602" alt="image" src="https://github.com/user-attachments/assets/9d660148-972e-4a2e-85ad-981eee1f0626" />
+
+
+
 The UI now includes:
 
 - A home/overview landing section
