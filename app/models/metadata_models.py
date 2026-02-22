@@ -1,6 +1,19 @@
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, root_validator
+
+
+class SourceType(str, Enum):
+    salesforce = "salesforce"
+    mssql = "mssql"
+    mysql = "mysql"
+
+
+class TargetType(str, Enum):
+    redshift = "redshift"
+    mssql = "mssql"
+    mysql = "mysql"
 
 
 class SalesforceCredentials(BaseModel):
@@ -19,15 +32,69 @@ class RedshiftCredentials(BaseModel):
     schema: str = "public"
 
 
+class MssqlAuthType(str, Enum):
+    sql = "sql"
+    windows = "windows"
+
+
+class MssqlCredentials(BaseModel):
+    host: str
+    port: int = 1433
+    database: str
+    user: Optional[str] = None
+    password: Optional[str] = None
+    schema: str = "dbo"
+    auth_type: MssqlAuthType = MssqlAuthType.sql
+    driver: Optional[str] = Field(
+        default=None,
+        description="ODBC driver name; defaults to 'ODBC Driver 17 for SQL Server'",
+    )
+
+    @root_validator(skip_on_failure=True)
+    def validate_sql_auth_requires_user_and_password(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        auth_type = values.get("auth_type") or MssqlAuthType.sql
+        if auth_type == MssqlAuthType.sql:
+            if not values.get("user") or not values.get("password"):
+                raise ValueError("user and password are required when auth_type is 'sql'")
+        return values
+
+
+class MysqlCredentials(BaseModel):
+    host: str
+    port: int = 3306
+    database: str
+    user: str
+    password: str
+    schema: Optional[str] = None  # defaults to database
+
+
 class GenerateMappingRequest(BaseModel):
-    salesforce_credentials: SalesforceCredentials
-    redshift_credentials: RedshiftCredentials
-    salesforce_object: str = Field(..., description="Salesforce object API name, e.g. Account")
-    redshift_table: str = Field(..., description="Redshift table name, e.g. account")
+    source_type: SourceType = Field(SourceType.salesforce, description="Source connection type")
+    target_type: TargetType = Field(TargetType.redshift, description="Target connection type")
+    salesforce_credentials: Optional[SalesforceCredentials] = None
+    redshift_credentials: Optional[RedshiftCredentials] = None
+    mssql_credentials: Optional[MssqlCredentials] = None
+    mysql_credentials: Optional[MysqlCredentials] = None
+    source_object: str = Field(..., description="Source object or table name")
+    target_table: str = Field(..., description="Target table name")
     preview: bool = Field(
         default=False,
         description="If true, returns JSON preview instead of Excel file",
     )
+
+    @root_validator(skip_on_failure=True)
+    def require_credentials_for_types(cls, values):
+        st = values.get("source_type")
+        tt = values.get("target_type")
+        if st == SourceType.salesforce and not values.get("salesforce_credentials"):
+            raise ValueError("salesforce_credentials required when source_type is salesforce")
+        if tt == TargetType.redshift and not values.get("redshift_credentials"):
+            raise ValueError("redshift_credentials required when target_type is redshift")
+        if (st == SourceType.mssql or tt == TargetType.mssql) and not values.get("mssql_credentials"):
+            raise ValueError("mssql_credentials required when source or target is mssql")
+        if (st == SourceType.mysql or tt == TargetType.mysql) and not values.get("mysql_credentials"):
+            raise ValueError("mysql_credentials required when source or target is mysql")
+        return values
 
 
 class MappingRow(BaseModel):

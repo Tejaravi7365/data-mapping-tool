@@ -64,6 +64,22 @@
         margin-bottom: 10px;
         color: #e5e7eb;
       }
+      .connection-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      .connection-group label {
+        display: block;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: #9ca3af;
+        margin-bottom: 6px;
+      }
+      .connection-group select {
+        width: 100%;
+      }
       .grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -103,29 +119,90 @@
       input::placeholder {
         color: #6b7280;
       }
-      .pill-row {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 16px;
+      .credential-section {
+        margin-bottom: 20px;
+        padding: 16px;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        background: rgba(31, 41, 55, 0.4);
       }
-      .pill {
-        flex: 1;
-        padding: 6px 10px;
-        border-radius: 999px;
-        background: rgba(31, 41, 55, 0.9);
-        border: 1px solid rgba(55, 65, 81, 1);
+      .credential-section.hidden {
+        display: none;
+      }
+      .help-tooltip {
+        position: relative;
+        display: inline-flex;
+        margin-left: 6px;
+        vertical-align: middle;
+      }
+      .help-tooltip-icon {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: rgba(59, 130, 246, 0.3);
+        color: #93c5fd;
         font-size: 0.75rem;
-        color: #d1d5db;
+        font-weight: 600;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 4px;
+        cursor: help;
       }
-      .pill span {
-        opacity: 0.9;
+      .help-tooltip-content {
+        display: none;
+        position: absolute;
+        left: 0;
+        top: 100%;
+        margin-top: 6px;
+        padding: 10px 12px;
+        max-width: 320px;
+        font-size: 0.8rem;
+        line-height: 1.4;
+        color: #e5e7eb;
+        background: rgba(15, 23, 42, 0.98);
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 10;
       }
-      .pill small {
-        color: #9ca3af;
+      .help-tooltip:hover .help-tooltip-content {
+        display: block;
+      }
+      .test-connection-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 12px;
+        flex-wrap: wrap;
+      }
+      .btn-test {
+        padding: 6px 14px;
+        border-radius: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        background: rgba(31, 41, 55, 0.8);
+        color: #e5e7eb;
+        font-size: 0.8rem;
+        cursor: pointer;
+      }
+      .btn-test:hover {
+        background: rgba(55, 65, 81, 0.9);
+      }
+      .btn-test:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .test-result {
+        font-size: 0.8rem;
+        padding: 4px 8px;
+        border-radius: 6px;
+      }
+      .test-result.success {
+        color: #86efac;
+        background: rgba(34, 197, 94, 0.15);
+      }
+      .test-result.error {
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.15);
       }
       .actions {
         display: flex;
@@ -176,6 +253,9 @@
         .card-body {
           padding: 16px;
         }
+        .connection-row {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
@@ -185,155 +265,216 @@
         <div>
           <div class="title">Data Mapping Sheet Generator</div>
           <div class="subtitle">
-            Salesforce &rarr; Amazon Redshift · Auto-generate a mapping Excel
-            from metadata.
+            Select source and target · Salesforce, MSSQL, MySQL &rarr; Redshift, MSSQL, MySQL
           </div>
         </div>
-        <div class="badge">MVP · Backend + UI</div>
+        <div class="badge">Multi-Source · Multi-Target</div>
       </div>
 
       <div class="card-body">
-        <form method="post" action="/ui/generate-mapping">
-          <div class="pill-row">
-            <div class="pill">
-              <span>Source</span>
-              <small>Salesforce</small>
-            </div>
-            <div class="pill">
-              <span>Target</span>
-              <small>Amazon Redshift</small>
-            </div>
-            <div class="pill">
-              <span>Mode</span>
-              <small>Mapping Sheet (Excel)</small>
-            </div>
-          </div>
-
-          <div class="section-title">Salesforce connection</div>
-          <div class="grid" style="margin-bottom: 18px">
-            <div>
-              <label for="sf_username">Username</label>
-              <input
-                id="sf_username"
-                name="sf_username"
-                type="text"
-                placeholder="salesforce.user@company.com"
-                required
-              />
-            </div>
-            <div>
-              <label for="sf_password">Password</label>
-              <input
-                id="sf_password"
-                name="sf_password"
-                type="password"
-                placeholder="Your Salesforce password"
-                required
-              />
-            </div>
-            <div>
-              <label for="sf_security_token">Security token</label>
-              <input
-                id="sf_security_token"
-                name="sf_security_token"
-                type="password"
-                placeholder="Salesforce security token"
-                required
-              />
-              <div class="field-hint">
-                From Salesforce profile &gt; Reset Security Token.
-              </div>
-            </div>
-            <div>
-              <label for="sf_domain">Domain</label>
-              <select id="sf_domain" name="sf_domain">
-                <option value="login">login (Production)</option>
-                <option value="test">test (Sandbox)</option>
+        <form method="post" action="/ui/generate-mapping" id="mapping-form">
+          <div class="connection-row">
+            <div class="connection-group">
+              <label for="source_type">Source connection</label>
+              <select id="source_type" name="source_type" required>
+                <option value="salesforce">Salesforce</option>
+                <option value="mssql">MSSQL (SQL Server)</option>
+                <option value="mysql">MySQL</option>
               </select>
             </div>
-            <div>
-              <label for="sf_object">Salesforce object API name</label>
+            <div class="connection-group">
+              <label for="target_type">Target connection</label>
+              <select id="target_type" name="target_type" required>
+                <option value="redshift">Amazon Redshift</option>
+                <option value="mssql">MSSQL (SQL Server)</option>
+                <option value="mysql">MySQL</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="connection-row">
+            <div class="connection-group">
+              <label for="source_object">Source object / table name</label>
               <input
-                id="sf_object"
-                name="sf_object"
+                id="source_object"
+                name="source_object"
                 type="text"
-                placeholder="e.g. Account"
+                placeholder="e.g. Account or my_table"
+                required
+              />
+            </div>
+            <div class="connection-group">
+              <label for="target_table">Target table name</label>
+              <input
+                id="target_table"
+                name="target_table"
+                type="text"
+                placeholder="e.g. account or my_table"
                 required
               />
             </div>
           </div>
 
-          <div class="section-title">Redshift connection</div>
-          <div class="grid">
-            <div>
-              <label for="rs_host">Host</label>
-              <input
-                id="rs_host"
-                name="rs_host"
-                type="text"
-                placeholder="cluster-name.region.redshift.amazonaws.com"
-                required
-              />
+          <div id="section-salesforce" class="credential-section hidden" data-for="source" data-type="salesforce">
+            <div class="section-title">Salesforce connection</div>
+            <div class="grid">
+              <div>
+                <label for="sf_username">Username</label>
+                <input id="sf_username" name="sf_username" type="text" placeholder="salesforce.user@company.com" />
+              </div>
+              <div>
+                <label for="sf_password">Password</label>
+                <input id="sf_password" name="sf_password" type="password" placeholder="Salesforce password" />
+              </div>
+              <div>
+                <label for="sf_security_token">Security token</label>
+                <input id="sf_security_token" name="sf_security_token" type="password" placeholder="Security token" />
+                <div class="field-hint">Profile &gt; Reset Security Token</div>
+              </div>
+              <div>
+                <label for="sf_domain">Domain</label>
+                <select id="sf_domain" name="sf_domain">
+                  <option value="login">login (Production)</option>
+                  <option value="test">test (Sandbox)</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label for="rs_port">Port</label>
-              <input
-                id="rs_port"
-                name="rs_port"
-                type="number"
-                value="5439"
-                required
-              />
+            <div class="test-connection-row">
+              <button type="button" class="btn-test" id="sf-test-btn">Test connection</button>
+              <span id="sf-test-result" class="test-result" aria-live="polite"></span>
             </div>
-            <div>
-              <label for="rs_database">Database</label>
-              <input
-                id="rs_database"
-                name="rs_database"
-                type="text"
-                placeholder="dev"
-                required
-              />
+          </div>
+
+          <div id="section-redshift" class="credential-section hidden" data-for="target" data-type="redshift">
+            <div class="section-title">Redshift connection</div>
+            <div class="grid">
+              <div>
+                <label for="rs_host">Host</label>
+                <input id="rs_host" name="rs_host" type="text" placeholder="cluster.region.redshift.amazonaws.com" />
+              </div>
+              <div>
+                <label for="rs_port">Port</label>
+                <input id="rs_port" name="rs_port" type="number" value="5439" />
+              </div>
+              <div>
+                <label for="rs_database">Database</label>
+                <input id="rs_database" name="rs_database" type="text" placeholder="dev" />
+              </div>
+              <div>
+                <label for="rs_user">User</label>
+                <input id="rs_user" name="rs_user" type="text" placeholder="redshift_user" />
+              </div>
+              <div>
+                <label for="rs_password">Password</label>
+                <input id="rs_password" name="rs_password" type="password" placeholder="Password" />
+              </div>
+              <div>
+                <label for="rs_schema">Schema</label>
+                <input id="rs_schema" name="rs_schema" type="text" value="public" />
+              </div>
             </div>
-            <div>
-              <label for="rs_user">User</label>
-              <input
-                id="rs_user"
-                name="rs_user"
-                type="text"
-                placeholder="redshift_user"
-                required
-              />
+            <div class="test-connection-row">
+              <button type="button" class="btn-test" id="rs-test-btn">Test connection</button>
+              <span id="rs-test-result" class="test-result" aria-live="polite"></span>
             </div>
-            <div>
-              <label for="rs_password">Password</label>
-              <input
-                id="rs_password"
-                name="rs_password"
-                type="password"
-                placeholder="Redshift password"
-                required
-              />
+          </div>
+
+          <div id="section-mssql" class="credential-section hidden" data-for="both" data-type="mssql">
+            <div class="section-title">MSSQL (SQL Server) connection</div>
+            <div class="grid">
+              <div>
+                <label for="mssql_auth_type">
+                  Authentication
+                  <span class="help-tooltip">
+                    <span class="help-tooltip-icon" aria-hidden="true">?</span>
+                    <span class="help-tooltip-content">
+                      <strong>SQL Server authentication:</strong> Use a database user name and password. Best for remote servers or when you don’t use a domain account.<br><br>
+                      <strong>Windows authentication:</strong> Uses your current Windows login (no password in the form). Ideal for localhost or when SQL Server is configured for Integrated Security. The app runs as your Windows user.
+                    </span>
+                  </span>
+                </label>
+                <select id="mssql_auth_type" name="mssql_auth_type">
+                  <option value="sql">SQL Server authentication (user &amp; password)</option>
+                  <option value="windows">Windows authentication (current user)</option>
+                </select>
+                <div class="field-hint">
+                  Windows authentication uses your current Windows login on this machine.
+                </div>
+              </div>
+              <div>
+                <label for="mssql_host">Host</label>
+                <input id="mssql_host" name="mssql_host" type="text" placeholder="localhost or localhost\SQLEXPRESS" />
+              </div>
+              <div>
+                <label for="mssql_port">Port</label>
+                <input id="mssql_port" name="mssql_port" type="number" value="1433" />
+              </div>
+              <div>
+                <label for="mssql_database">Database</label>
+                <input id="mssql_database" name="mssql_database" type="text" placeholder="mydb" />
+              </div>
+              <div>
+                <label for="mssql_user">User</label>
+                <input id="mssql_user" name="mssql_user" type="text" placeholder="sa or user" />
+              </div>
+              <div>
+                <label for="mssql_password">Password</label>
+                <input id="mssql_password" name="mssql_password" type="password" placeholder="Password" />
+              </div>
+              <div>
+                <label for="mssql_schema">Schema</label>
+                <input id="mssql_schema" name="mssql_schema" type="text" value="dbo" />
+              </div>
+              <div>
+                <label for="mssql_driver">ODBC driver (optional)</label>
+                <input
+                  id="mssql_driver"
+                  name="mssql_driver"
+                  type="text"
+                  placeholder="ODBC Driver 17 for SQL Server"
+                />
+                <div class="field-hint">
+                  Leave blank to use the default installed SQL Server ODBC driver.
+                </div>
+              </div>
             </div>
-            <div>
-              <label for="rs_schema">Schema</label>
-              <input
-                id="rs_schema"
-                name="rs_schema"
-                type="text"
-                value="public"
-                required
-              />
+            <div class="test-connection-row">
+              <button type="button" class="btn-test" id="mssql-test-btn">Test connection</button>
+              <span id="mssql-test-result" class="test-result" aria-live="polite"></span>
             </div>
-            <div>
-              <label for="rs_table">Target table name</label>
-              <input
-                id="rs_table"
-                name="rs_table"
-                type="text"
-                placeholder="e.g. account"
-                required
-              />
+          </div>
+
+          <div id="section-mysql" class="credential-section hidden" data-for="both" data-type="mysql">
+            <div class="section-title">MySQL connection</div>
+            <div class="grid">
+              <div>
+                <label for="mysql_host">Host</label>
+                <input id="mysql_host" name="mysql_host" type="text" placeholder="localhost or host.example.com" />
+              </div>
+              <div>
+                <label for="mysql_port">Port</label>
+                <input id="mysql_port" name="mysql_port" type="number" value="3306" />
+              </div>
+              <div>
+                <label for="mysql_database">Database</label>
+                <input id="mysql_database" name="mysql_database" type="text" placeholder="mydb" />
+              </div>
+              <div>
+                <label for="mysql_user">User</label>
+                <input id="mysql_user" name="mysql_user" type="text" placeholder="root or user" />
+              </div>
+              <div>
+                <label for="mysql_password">Password</label>
+                <input id="mysql_password" name="mysql_password" type="password" placeholder="Password" />
+              </div>
+              <div>
+                <label for="mysql_schema">Schema (optional)</label>
+                <input id="mysql_schema" name="mysql_schema" type="text" placeholder="same as database if empty" />
+              </div>
+            </div>
+            <div class="test-connection-row">
+              <button type="button" class="btn-test" id="mysql-test-btn">Test connection</button>
+              <span id="mysql-test-result" class="test-result" aria-live="polite"></span>
             </div>
           </div>
 
@@ -341,11 +482,7 @@
             <div class="status">
               Output:&nbsp;<span>mapping_sheet.xlsx</span>
             </div>
-            <button
-              type="button"
-              class="btn-secondary"
-              onclick="window.location.href = '/docs';"
-            >
+            <button type="button" class="btn-secondary" onclick="window.location.href='/docs';">
               API docs
             </button>
             <button type="submit" class="btn-primary">
@@ -356,6 +493,216 @@
         </form>
       </div>
     </div>
+
+    <script>
+      (function () {
+        var sourceSelect = document.getElementById('source_type');
+        var targetSelect = document.getElementById('target_type');
+        var sections = document.querySelectorAll('.credential-section');
+
+        function updateVisibility() {
+          var source = sourceSelect.value;
+          var target = targetSelect.value;
+
+          sections.forEach(function (section) {
+            var forRole = section.getAttribute('data-for');
+            var type = section.getAttribute('data-type');
+            var show = false;
+            if (forRole === 'source' && type === source) show = true;
+            if (forRole === 'target' && type === target) show = true;
+            if (forRole === 'both' && (type === source || type === target)) show = true;
+            section.classList.toggle('hidden', !show);
+
+            var inputs = section.querySelectorAll('input, select');
+            inputs.forEach(function (input) {
+              input.removeAttribute('required');
+              if (show) input.setAttribute('required', 'required');
+            });
+          });
+
+          updateMssqlAuth();
+        }
+
+        var mssqlAuthSelect = document.getElementById('mssql_auth_type');
+        function updateMssqlAuth() {
+          if (!mssqlAuthSelect) return;
+          var section = document.getElementById('section-mssql');
+          var userInput = document.getElementById('mssql_user');
+          var pwdInput = document.getElementById('mssql_password');
+          if (!section || section.classList.contains('hidden')) {
+            if (userInput) userInput.removeAttribute('required');
+            if (pwdInput) pwdInput.removeAttribute('required');
+            return;
+          }
+          if (mssqlAuthSelect.value === 'windows') {
+            if (userInput) userInput.removeAttribute('required');
+            if (pwdInput) pwdInput.removeAttribute('required');
+          } else {
+            if (userInput) userInput.setAttribute('required', 'required');
+            if (pwdInput) pwdInput.setAttribute('required', 'required');
+          }
+        }
+
+        function getSalesforcePayload() {
+          return {
+            username: document.getElementById('sf_username').value.trim(),
+            password: document.getElementById('sf_password').value,
+            security_token: document.getElementById('sf_security_token').value,
+            domain: document.getElementById('sf_domain').value || 'login',
+          };
+        }
+
+        function getRedshiftPayload() {
+          return {
+            host: document.getElementById('rs_host').value.trim(),
+            port: parseInt(document.getElementById('rs_port').value, 10) || 5439,
+            database: document.getElementById('rs_database').value.trim(),
+            user: document.getElementById('rs_user').value.trim(),
+            password: document.getElementById('rs_password').value,
+            schema: document.getElementById('rs_schema').value.trim() || 'public',
+          };
+        }
+
+        function getMssqlPayload() {
+          var authType = document.getElementById('mssql_auth_type').value;
+          var payload = {
+            host: document.getElementById('mssql_host').value.trim(),
+            port: parseInt(document.getElementById('mssql_port').value, 10) || 1433,
+            database: document.getElementById('mssql_database').value.trim(),
+            schema: document.getElementById('mssql_schema').value.trim() || 'dbo',
+            auth_type: authType,
+          };
+          var driver = document.getElementById('mssql_driver').value.trim();
+          if (driver) payload.driver = driver;
+          if (authType === 'sql') {
+            payload.user = document.getElementById('mssql_user').value;
+            payload.password = document.getElementById('mssql_password').value;
+          } else {
+            payload.user = null;
+            payload.password = null;
+          }
+          return payload;
+        }
+
+        function getMysqlPayload() {
+          return {
+            host: document.getElementById('mysql_host').value.trim(),
+            port: parseInt(document.getElementById('mysql_port').value, 10) || 3306,
+            database: document.getElementById('mysql_database').value.trim(),
+            user: document.getElementById('mysql_user').value.trim(),
+            password: document.getElementById('mysql_password').value,
+            schema: document.getElementById('mysql_schema').value.trim() || null,
+          };
+        }
+
+        function validatePayload(type, payload) {
+          if (type === 'salesforce') {
+            if (!payload.username || !payload.password || !payload.security_token) {
+              return 'Enter Salesforce username, password, and security token.';
+            }
+            return null;
+          }
+          if (type === 'redshift') {
+            if (!payload.host || !payload.database || !payload.user || !payload.password) {
+              return 'Enter Redshift host, database, user, and password.';
+            }
+            return null;
+          }
+          if (type === 'mssql') {
+            if (!payload.host || !payload.database) {
+              return 'Enter MSSQL host and database first.';
+            }
+            if (payload.auth_type === 'sql' && (!payload.user || !payload.password)) {
+              return 'Enter user and password for SQL auth.';
+            }
+            return null;
+          }
+          if (type === 'mysql') {
+            if (!payload.host || !payload.database || !payload.user || !payload.password) {
+              return 'Enter MySQL host, database, user, and password.';
+            }
+            return null;
+          }
+          return 'Invalid connection type.';
+        }
+
+        function formatError(data) {
+          if (!data) return 'Connection failed.';
+          var stage = data.stage ? ('Stage: ' + data.stage + '. ') : '';
+          var detail = data.detail || 'Unknown error.';
+          var hint = data.hint ? (' Hint: ' + data.hint) : '';
+          return stage + detail + hint;
+        }
+
+        function testConnection(type, payloadBuilder, btnId, resultId) {
+          var btn = document.getElementById(btnId);
+          var resultEl = document.getElementById(resultId);
+          if (!btn || !resultEl) return;
+          var payload = payloadBuilder();
+          var validationErr = validatePayload(type, payload);
+          if (validationErr) {
+            resultEl.textContent = validationErr;
+            resultEl.className = 'test-result error';
+            return;
+          }
+          btn.disabled = true;
+          resultEl.textContent = 'Testing…';
+          resultEl.className = 'test-result';
+          fetch('/api/test-connection/' + type, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (data.ok) {
+                resultEl.textContent = 'Connection successful.';
+                resultEl.className = 'test-result success';
+              } else {
+                resultEl.textContent = formatError(data);
+                resultEl.className = 'test-result error';
+              }
+            })
+            .catch(function (err) {
+              resultEl.textContent = err.message || 'Request failed.';
+              resultEl.className = 'test-result error';
+            })
+            .finally(function () {
+              btn.disabled = false;
+            });
+        }
+
+        sourceSelect.addEventListener('change', updateVisibility);
+        targetSelect.addEventListener('change', updateVisibility);
+        if (mssqlAuthSelect) {
+          mssqlAuthSelect.addEventListener('change', updateMssqlAuth);
+        }
+        var mssqlTestBtn = document.getElementById('mssql-test-btn');
+        if (mssqlTestBtn) {
+          mssqlTestBtn.addEventListener('click', function () {
+            testConnection('mssql', getMssqlPayload, 'mssql-test-btn', 'mssql-test-result');
+          });
+        }
+        var sfTestBtn = document.getElementById('sf-test-btn');
+        if (sfTestBtn) {
+          sfTestBtn.addEventListener('click', function () {
+            testConnection('salesforce', getSalesforcePayload, 'sf-test-btn', 'sf-test-result');
+          });
+        }
+        var rsTestBtn = document.getElementById('rs-test-btn');
+        if (rsTestBtn) {
+          rsTestBtn.addEventListener('click', function () {
+            testConnection('redshift', getRedshiftPayload, 'rs-test-btn', 'rs-test-result');
+          });
+        }
+        var mysqlTestBtn = document.getElementById('mysql-test-btn');
+        if (mysqlTestBtn) {
+          mysqlTestBtn.addEventListener('click', function () {
+            testConnection('mysql', getMysqlPayload, 'mysql-test-btn', 'mysql-test-result');
+          });
+        }
+        updateVisibility();
+      })();
+    </script>
   </body>
 </html>
-

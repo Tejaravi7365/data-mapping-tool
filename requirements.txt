@@ -7,3 +7,6 @@ openpyxl
 pydantic
 jinja2
 python-multipart
+pymssql
+PyMySQL
+pyodbc
