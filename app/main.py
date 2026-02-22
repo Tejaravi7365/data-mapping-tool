@@ -28,6 +28,7 @@ from .logging_utils import setup_logger
 app = FastAPI(title="Data Mapping Sheet Generator (Multi-Source → Multi-Target)")
 templates = Jinja2Templates(directory="app/templates")
 logger = setup_logger()
+APP_BUILD = "multi-source-v2"
 
 
 def _sanitize_credentials(credentials: Dict[str, Any]) -> Dict[str, Any]:
@@ -178,7 +179,22 @@ def ui_home(request: Request):
     """
     Simple HTML UI for selecting source/target and entering connection details.
     """
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "app_build": APP_BUILD,
+        },
+    )
+
+
+@app.get("/health/version")
+def health_version():
+    return {
+        "status": "ok",
+        "title": app.title,
+        "build": APP_BUILD,
+    }
 
 
 def _build_request_from_form(form_data: dict) -> GenerateMappingRequest:

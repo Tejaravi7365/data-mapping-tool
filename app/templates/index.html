@@ -55,6 +55,11 @@
         color: #bfdbfe;
         border: 1px solid rgba(59, 130, 246, 0.5);
       }
+      .build-meta {
+        font-size: 0.72rem;
+        color: #93c5fd;
+        margin-top: 6px;
+      }
       .card-body {
         padding: 20px 24px 24px;
       }
@@ -267,6 +272,9 @@
           <div class="subtitle">
             Select source and target · Salesforce, MSSQL, MySQL &rarr; Redshift, MSSQL, MySQL
           </div>
+          <div class="build-meta">
+            Build: <span id="build-id">{{ app_build }}</span>
+          </div>
         </div>
         <div class="badge">Multi-Source · Multi-Target</div>
       </div>
@@ -432,6 +440,7 @@
                   name="mssql_driver"
                   type="text"
                   placeholder="ODBC Driver 17 for SQL Server"
+                  data-optional="true"
                 />
                 <div class="field-hint">
                   Leave blank to use the default installed SQL Server ODBC driver.
@@ -469,7 +478,7 @@
               </div>
               <div>
                 <label for="mysql_schema">Schema (optional)</label>
-                <input id="mysql_schema" name="mysql_schema" type="text" placeholder="same as database if empty" />
+                <input id="mysql_schema" name="mysql_schema" type="text" placeholder="same as database if empty" data-optional="true" />
               </div>
             </div>
             <div class="test-connection-row">
@@ -516,7 +525,8 @@
             var inputs = section.querySelectorAll('input, select');
             inputs.forEach(function (input) {
               input.removeAttribute('required');
-              if (show) input.setAttribute('required', 'required');
+              var isOptional = input.getAttribute('data-optional') === 'true';
+              if (show && !isOptional) input.setAttribute('required', 'required');
             });
           });
 
