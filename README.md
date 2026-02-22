@@ -1,190 +1,147 @@
-# Data Mapping Sheet Generator (Salesforce → Redshift MVP)
+# Data Mapping Sheet Generator (Multi-Source → Multi-Target)
 
 ## Overview
 
-This backend service generates a data mapping sheet between:
+This tool helps data engineers quickly generate a mapping sheet by reading source/target metadata and producing an Excel output for ETL delivery.
 
-- **Source**: Salesforce object metadata
-- **Target**: Amazon Redshift table metadata
+### Business Narrative (for leadership/demo)
 
-  <img width="1069" height="627" alt="image" src="https://github.com/user-attachments/assets/c68f80cf-dcd2-4550-9f7c-2b79b3e69d4a" />
+- **Problem**: Manual mapping creation slows projects and introduces inconsistency.
+- **Value**: Metadata-driven mapping standardizes design input for ETL engineers.
+- **Outcomes**: Faster analysis-to-build handoff with fewer mapping ambiguities.
+- **Roadmap**: AI-assisted mapping and ETL-pattern recommendations for higher automation confidence.
 
+Supported platforms:
 
-It exposes a FastAPI endpoint that:
+- **Source**: Salesforce, MSSQL (SQL Server), MySQL
+- **Target**: Amazon Redshift, MSSQL (SQL Server), MySQL
 
-- Connects to Salesforce and Redshift
-- Extracts object / table metadata
-- Applies simple data type and name-based mapping rules
-- Returns a mapping sheet as an Excel file or JSON preview
+The UI now includes:
 
-## Tech Stack
+- A home/overview landing section
+- A presentation mode for leadership demos
+- A "Launch Mapping Studio" entry point
+- Source/Target database dropdowns
+- Dynamic connection parameter tabs (Source, Target, Both)
+- Per-connector test-connection actions
+- Mapping generation with success message and download
+- Automatic desktop copy on successful UI generation
 
-- **Language**: Python
-- **Framework**: FastAPI
-- **Salesforce**: `simple-salesforce`
-- **Redshift**: `psycopg2-binary`
-- **Data Processing**: `pandas`
-- **Excel Export**: `openpyxl`
+## Why it matters for ETL teams
 
-## Project Structure
+- Reduces manual field-by-field mapping effort
+- Creates a consistent mapping baseline for ETL code development
+- Improves handoff quality between analysis, engineering, and QA
+- Speeds up onboarding for new integration projects
 
-```text
-data-mapping-tool/
-│
-├── app/
-│   ├── main.py
-│   ├── config.py
-│   ├── connectors/
-│   │   ├── salesforce_connector.py
-│   │   └── redshift_connector.py
-│   ├── services/
-│   │   ├── metadata_service.py
-│   │   ├── mapping_engine.py
-│   │   └── excel_generator.py
-│   └── models/
-│       └── metadata_models.py
-│
-├── requirements.txt
-└── README.md
-```
+## Current Features
 
-## Prerequisites
-
-Before running this application, ensure you have:
-
-- **Python 3.8 or higher** installed on your system
-  - Check by running: `python --version` or `python3 --version`
-  - Download from: https://www.python.org/downloads/
-- **Git** (optional, if cloning from GitHub)
-- **Internet connection** (for installing dependencies and connecting to Salesforce/Redshift)
-
-## Installation
-
-### Step 1: Get the Code
-
-**Option A: Clone from GitHub (if repository is available)**
-```bash
-git clone <your-repository-url>
-cd data-mapping-tool
-```
-
-**Option B: Copy the project folder**
-- Copy the entire `data-mapping-tool` folder to the target PC
-- Navigate to the folder in terminal/command prompt
-
-### Step 2: Create Virtual Environment
-
-**On Windows:**
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-```
-
-**On macOS/Linux:**
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-### Step 3: Install Dependencies
-
-From the `data-mapping-tool` directory:
-
-```bash
-pip install -r requirements.txt
-```
-
-This will install:
-- FastAPI (web framework)
-- uvicorn (ASGI server)
-- simple-salesforce (Salesforce connector)
-- psycopg2-binary (PostgreSQL/Redshift connector)
-- pandas (data processing)
-- openpyxl (Excel file generation)
-- pydantic (data validation)
-- jinja2 (template engine)
-- python-multipart (form data handling)
-
-## Running the API
-
-### Start the Server
-
-From the `data-mapping-tool` directory (with virtual environment activated):
-
-```bash
-uvicorn app.main:app --reload
-```
-
-**Alternative command (if uvicorn not in PATH):**
-```bash
-python -m uvicorn app.main:app --reload
-```
-
-### Access the Application
-
-Once started, the application will be available at:
-
-- **Web UI**: http://127.0.0.1:8000
-- **API Documentation**: http://127.0.0.1:8000/docs (Swagger UI)
-- **Alternative API Docs**: http://127.0.0.1:8000/redoc
-
-### Running on a Different Port
-
-To run on a different port (e.g., 8080):
-
-```bash
-uvicorn app.main:app --reload --port 8080
-```
-
-### Running on Network (Accessible from Other Devices)
-
-To make the application accessible from other devices on your network:
-
-```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Then access it from other devices using: `http://<your-pc-ip-address>:8000`
-
-**Note**: Make sure your firewall allows incoming connections on the specified port.
-
-## Usage
-
-Endpoint:
-
-- **POST** `/generate-mapping`
-
-Example request body:
-
-```json
-{
-  "salesforce_credentials": {
-    "username": "your-username",
-    "password": "your-password",
-    "security_token": "your-token",
-    "domain": "login"
-  },
-  "redshift_credentials": {
-    "host": "redshift-cluster.amazonaws.com",
-    "port": 5439,
-    "database": "dev",
-    "user": "your-user",
-    "password": "your-password",
-    "schema": "public"
-  },
-  "salesforce_object": "Account",
-  "redshift_table": "account",
-  "preview": false
-}
-```
-
-- If `preview` is `false` or omitted, the endpoint returns an Excel file (`mapping_sheet.xlsx`).
-- If `preview` is `true`, the endpoint returns a JSON representation of the mapping.
+- Metadata-driven mapping for Salesforce/MSSQL/MySQL/Redshift
+- Type and name-based match logic
+- Excel export (`.xlsx`)
+- Connection testing endpoints for all supported connectors
+- Detailed stage-based error messages and hints
+- Application logs with masked credentials
+- Build/version endpoint (`/health/version`)
 
 ## Future Enhancements
 
-- Support additional sources (MSSQL, flat files) and targets (Athena)
-- Fuzzy matching and AI-powered mapping suggestions
-- UI for interactive configuration
-- Versioning and history of mapping sheets
+- AI-enhanced mapping recommendations based on ETL coding patterns
+- Transformation-rule suggestions and confidence scoring
+- Cross-system lineage hints
+- Mapping quality checks (coverage, drift, compatibility)
+- Versioned mapping history and approvals
+
+## Tech Stack
+
+- Python + FastAPI
+- pandas + openpyxl
+- Connector libraries: `simple-salesforce`, `pyodbc`, `pymysql`, `psycopg2-binary`
+
+## Quick Start
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8101 --app-dir c:\projects\data-mapping-tool
+```
+
+Open:
+
+- UI: `http://127.0.0.1:8101/`
+- API docs: `http://127.0.0.1:8101/docs`
+- Version health: `http://127.0.0.1:8101/health/version`
+
+Demo tip:
+
+- Click `Presentation Mode` on the landing page to show an executive summary with KPI-style cards.
+
+## Run On Another System
+
+Use this section when sharing the app with another developer or business user machine.
+
+### 1) Prerequisites
+
+- Python 3.10+ installed
+- Internet access for `pip install`
+- Optional but recommended:
+  - SQL Server ODBC driver (`ODBC Driver 17` or `18`) for MSSQL connectivity
+  - Access rights to source/target systems (Salesforce, MSSQL, MySQL, Redshift)
+
+### 2) Copy project
+
+- Option A: clone repository
+- Option B: copy the full `data-mapping-tool` folder
+
+### 3) Setup and run (Windows)
+
+```cmd
+cd /d <path>\data-mapping-tool
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8101 --app-dir <path>\data-mapping-tool
+```
+
+### 4) Setup and run (macOS/Linux)
+
+```bash
+cd /path/to/data-mapping-tool
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8101 --app-dir /path/to/data-mapping-tool
+```
+
+### 5) Access URLs
+
+- UI: `http://127.0.0.1:8101/`
+- API docs: `http://127.0.0.1:8101/docs`
+- Version check: `http://127.0.0.1:8101/health/version`
+
+### 6) Common issues on new machines
+
+- `ModuleNotFoundError`: virtual environment not activated or dependencies not installed.
+- `Not Found` on test endpoints: old server process still running on same port; stop and restart.
+- MSSQL connection fails with driver errors:
+  - install SQL Server ODBC Driver 17/18
+  - leave ODBC driver field blank to auto-select installed SQL Server driver
+- Port already in use:
+  - run with another port (example `--port 8102`)
+
+## Key Endpoints
+
+- `POST /api/test-connection/salesforce`
+- `POST /api/test-connection/redshift`
+- `POST /api/test-connection/mssql`
+- `POST /api/test-connection/mysql`
+- `POST /generate-mapping`
+- `POST /ui/generate-mapping`
+
+## Security
+
+For a stakeholder-friendly security explanation, see:
+
+- `SECURITY_CONSIDERATIONS.md`
 

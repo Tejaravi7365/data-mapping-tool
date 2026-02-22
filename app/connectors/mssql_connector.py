@@ -94,8 +94,9 @@ class MssqlConnector:
         if not rows:
             return pd.DataFrame(columns=["table_name", "column_name", "data_type", "length", "nullable"])
 
+        normalized_rows = [tuple(r) for r in rows]
         df = pd.DataFrame(
-            rows,
+            normalized_rows,
             columns=["table_name", "column_name", "data_type", "length", "is_nullable"],
         )
         df["nullable"] = df["is_nullable"].str.upper().eq("YES")
@@ -128,8 +129,9 @@ class MssqlConnector:
         if not rows:
             return pd.DataFrame(columns=["table_name", "column_name", "data_type", "length", "nullable"])
 
+        normalized_rows = [tuple(r) for r in rows]
         df = pd.DataFrame(
-            rows,
+            normalized_rows,
             columns=["table_name", "column_name", "data_type", "length", "is_nullable"],
         )
         df["nullable"] = df["is_nullable"].str.upper().eq("YES")

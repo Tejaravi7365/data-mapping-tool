@@ -22,7 +22,7 @@
       }
       .card {
         width: 100%;
-        max-width: 960px;
+        max-width: 1040px;
         background: rgba(15, 23, 42, 0.95);
         border-radius: 16px;
         box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
@@ -62,6 +62,99 @@
       }
       .card-body {
         padding: 20px 24px 24px;
+      }
+      .landing {
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 14px;
+        padding: 18px;
+        background: rgba(30, 41, 59, 0.35);
+        margin-bottom: 16px;
+      }
+      .landing-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #dbeafe;
+      }
+      .landing-text {
+        margin-top: 8px;
+        color: #cbd5e1;
+        font-size: 0.86rem;
+        line-height: 1.45;
+      }
+      .landing-grid {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+      }
+      .landing-card {
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: rgba(15, 23, 42, 0.5);
+      }
+      .landing-card h4 {
+        margin: 0 0 6px 0;
+        font-size: 0.83rem;
+        color: #bfdbfe;
+      }
+      .landing-card p {
+        margin: 0;
+        font-size: 0.78rem;
+        color: #cbd5e1;
+      }
+      .launch-row {
+        margin-top: 14px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .kpi-grid {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 10px;
+      }
+      .kpi-card {
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: rgba(15, 23, 42, 0.58);
+      }
+      .kpi-label {
+        font-size: 0.73rem;
+        color: #93c5fd;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .kpi-value {
+        margin-top: 4px;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #e2e8f0;
+      }
+      .workspace.hidden {
+        display: none;
+      }
+      .param-tabs {
+        margin-bottom: 14px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .param-tab {
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        background: rgba(15, 23, 42, 0.8);
+        color: #cbd5e1;
+        border-radius: 999px;
+        padding: 6px 12px;
+        cursor: pointer;
+        font-size: 0.78rem;
+      }
+      .param-tab.active {
+        border-color: rgba(59, 130, 246, 0.8);
+        color: #dbeafe;
+        background: rgba(37, 99, 235, 0.3);
       }
       .section-title {
         font-size: 0.9rem;
@@ -132,6 +225,9 @@
         background: rgba(31, 41, 55, 0.4);
       }
       .credential-section.hidden {
+        display: none;
+      }
+      .hidden {
         display: none;
       }
       .help-tooltip {
@@ -250,6 +346,23 @@
         color: #a5b4fc;
         font-weight: 500;
       }
+      .submit-status {
+        margin-top: 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        font-size: 0.82rem;
+      }
+      .submit-status.hidden {
+        display: none;
+      }
+      .submit-status.success {
+        color: #86efac;
+        background: rgba(34, 197, 94, 0.15);
+      }
+      .submit-status.error {
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.15);
+      }
       @media (max-width: 640px) {
         .card {
           border-radius: 12px;
@@ -280,6 +393,78 @@
       </div>
 
       <div class="card-body">
+        <section id="home-landing" class="landing">
+          <div class="landing-title">Executive Overview: Metadata-to-Mapping Studio</div>
+          <div class="landing-text">
+            Enterprise data programs often lose time in manual schema interpretation, inconsistent mapping templates, and repeated back-and-forth between analysts and ETL engineers.
+            This studio turns live source/target metadata into actionable mapping sheets, reducing rework and improving delivery predictability.
+          </div>
+          <div class="landing-grid">
+            <div class="landing-card">
+              <h4>1) Problem We Solve</h4>
+              <p>Manual mapping creation is slow, error-prone, and difficult to standardize across teams and projects.</p>
+            </div>
+            <div class="landing-card">
+              <h4>2) Business Value</h4>
+              <p>Metadata-driven mapping accelerates ETL design, improves requirement clarity, and creates a reusable baseline for engineering implementation.</p>
+            </div>
+            <div class="landing-card">
+              <h4>3) Current Outcomes</h4>
+              <p>Supports Salesforce, MSSQL, MySQL, and Redshift with dynamic connectors, testable connections, and one-click mapping sheet generation.</p>
+            </div>
+            <div class="landing-card">
+              <h4>4) Roadmap Significance</h4>
+              <p>AI-enhanced matching and ETL pattern suggestions can convert engineer-authored transformation logic into faster, higher-confidence mapping recommendations.</p>
+            </div>
+          </div>
+          <div class="launch-row">
+            <button type="button" id="launch-workspace-btn" class="btn-primary">
+              Launch Mapping Studio
+            </button>
+            <button type="button" id="presentation-mode-btn" class="btn-secondary">
+              Presentation Mode
+            </button>
+            <button type="button" class="btn-secondary" onclick="window.location.href='/security/notes';">
+              Security notes
+            </button>
+          </div>
+        </section>
+
+        <section id="presentation-panel" class="landing hidden">
+          <div class="landing-title">Presentation Mode: Executive Summary</div>
+          <div class="landing-text">
+            This mode highlights business outcomes, operational value, and roadmap impact while hiding detailed engineering controls.
+            Use it for leadership demos, steering discussions, and investment alignment sessions.
+          </div>
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-label">Connector Coverage</div>
+              <div class="kpi-value">4 Platforms</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Primary Outcome</div>
+              <div class="kpi-value">Faster Mapping Cycle</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Delivery Artifact</div>
+              <div class="kpi-value">Excel Mapping Sheet</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Roadmap Focus</div>
+              <div class="kpi-value">AI-Enhanced ETL Mapping</div>
+            </div>
+          </div>
+          <div class="launch-row">
+            <button type="button" id="launch-from-presentation-btn" class="btn-primary">
+              Launch Mapping Studio
+            </button>
+            <button type="button" id="exit-presentation-btn" class="btn-secondary">
+              Back to Overview
+            </button>
+          </div>
+        </section>
+
+        <div id="workspace" class="workspace hidden">
         <form method="post" action="/ui/generate-mapping" id="mapping-form">
           <div class="connection-row">
             <div class="connection-group">
@@ -321,6 +506,12 @@
                 required
               />
             </div>
+          </div>
+
+          <div class="param-tabs" id="param-tabs">
+            <button type="button" class="param-tab active" data-tab="source">Source parameters</button>
+            <button type="button" class="param-tab" data-tab="target">Target parameters</button>
+            <button type="button" class="param-tab" data-tab="all">Both</button>
           </div>
 
           <div id="section-salesforce" class="credential-section hidden" data-for="source" data-type="salesforce">
@@ -495,19 +686,190 @@
               API docs
             </button>
             <button type="submit" class="btn-primary">
-              Generate mapping sheet
+              <span id="generate-label">Generate mapping sheet</span>
+              <span id="generate-spinner" class="hidden">Processing…</span>
               <span>↓</span>
             </button>
           </div>
+          <div id="submit-status" class="submit-status hidden" aria-live="polite"></div>
         </form>
+        </div>
       </div>
     </div>
 
     <script>
       (function () {
+        var mappingForm = document.getElementById('mapping-form');
+        var homeLanding = document.getElementById('home-landing');
+        var presentationPanel = document.getElementById('presentation-panel');
+        var workspace = document.getElementById('workspace');
+        var launchWorkspaceBtn = document.getElementById('launch-workspace-btn');
+        var launchFromPresentationBtn = document.getElementById('launch-from-presentation-btn');
+        var presentationModeBtn = document.getElementById('presentation-mode-btn');
+        var exitPresentationBtn = document.getElementById('exit-presentation-btn');
+        var paramTabs = document.querySelectorAll('.param-tab');
+        var activeParamTab = 'source';
+        var submitStatus = document.getElementById('submit-status');
+        var generateLabel = document.getElementById('generate-label');
+        var generateSpinner = document.getElementById('generate-spinner');
+
+        function launchWorkspace() {
+          if (homeLanding) homeLanding.classList.add('hidden');
+          if (presentationPanel) presentationPanel.classList.add('hidden');
+          if (workspace) workspace.classList.remove('hidden');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          updateVisibility();
+        }
+
+        function enterPresentationMode() {
+          if (homeLanding) homeLanding.classList.add('hidden');
+          if (workspace) workspace.classList.add('hidden');
+          if (presentationPanel) presentationPanel.classList.remove('hidden');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function exitPresentationMode() {
+          if (presentationPanel) presentationPanel.classList.add('hidden');
+          if (homeLanding) homeLanding.classList.remove('hidden');
+        }
+
+        function showSubmitStatus(message, isError) {
+          if (!submitStatus) return;
+          submitStatus.textContent = message;
+          submitStatus.className = 'submit-status ' + (isError ? 'error' : 'success');
+        }
+
+        function clearSubmitStatus() {
+          if (!submitStatus) return;
+          submitStatus.textContent = '';
+          submitStatus.className = 'submit-status hidden';
+        }
+
+        function toggleGenerateLoading(isLoading) {
+          if (generateLabel) generateLabel.classList.toggle('hidden', isLoading);
+          if (generateSpinner) generateSpinner.classList.toggle('hidden', !isLoading);
+        }
+
+        function filenameFromDisposition(disposition) {
+          if (!disposition) return 'mapping_sheet.xlsx';
+          var match = /filename=\"?([^\";]+)\"?/i.exec(disposition);
+          return match && match[1] ? match[1] : 'mapping_sheet.xlsx';
+        }
+
+        function downloadBlob(blob, filename) {
+          var url = window.URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+        }
+
+        function submitGenerateMapping(evt) {
+          evt.preventDefault();
+          clearSubmitStatus();
+          var validationErr = validateGenerateForm();
+          if (validationErr) {
+            showSubmitStatus(validationErr, true);
+            return;
+          }
+          toggleGenerateLoading(true);
+          var formData = new FormData(mappingForm);
+
+          fetch('/ui/generate-mapping', {
+            method: 'POST',
+            body: formData,
+          })
+            .then(function (response) {
+              var contentType = response.headers.get('content-type') || '';
+              if (!response.ok || contentType.indexOf('application/json') >= 0) {
+                return response.json().then(function (err) {
+                  throw new Error((err && err.detail) || 'Mapping generation failed.');
+                });
+              }
+              var filename = filenameFromDisposition(response.headers.get('content-disposition'));
+              var desktopPath = response.headers.get('x-desktop-path');
+              return response.blob().then(function (blob) {
+                downloadBlob(blob, filename);
+                var msg = 'Data mapping sheet generation completed successfully.';
+                if (desktopPath) {
+                  msg += ' Saved to Desktop: ' + desktopPath;
+                }
+                showSubmitStatus(msg, false);
+              });
+            })
+            .catch(function (err) {
+              showSubmitStatus(err.message || 'Mapping generation failed.', true);
+            })
+            .finally(function () {
+              toggleGenerateLoading(false);
+            });
+        }
+
+        function valueOf(id) {
+          var el = document.getElementById(id);
+          if (!el) return '';
+          return (el.value || '').trim();
+        }
+
+        function validateGenerateForm() {
+          var sourceType = valueOf('source_type');
+          var targetType = valueOf('target_type');
+          var shouldValidateSource = activeParamTab !== 'target';
+          var shouldValidateTarget = activeParamTab !== 'source';
+
+          if (!valueOf('source_object')) return 'Enter source object/table name.';
+          if (!valueOf('target_table')) return 'Enter target table name.';
+
+          if (shouldValidateSource && sourceType === 'salesforce') {
+            if (!valueOf('sf_username') || !document.getElementById('sf_password').value || !document.getElementById('sf_security_token').value) {
+              return 'For Salesforce source, enter username, password, and security token.';
+            }
+          }
+
+          if (shouldValidateTarget && targetType === 'redshift') {
+            if (!valueOf('rs_host') || !valueOf('rs_database') || !valueOf('rs_user') || !document.getElementById('rs_password').value) {
+              return 'For Redshift target, enter host, database, user, and password.';
+            }
+          }
+
+          var validateMysql =
+            (shouldValidateSource && sourceType === 'mysql') ||
+            (shouldValidateTarget && targetType === 'mysql');
+          if (validateMysql) {
+            if (!valueOf('mysql_host') || !valueOf('mysql_database') || !valueOf('mysql_user') || !document.getElementById('mysql_password').value) {
+              return 'For MySQL, enter host, database, user, and password.';
+            }
+          }
+
+          var validateMssql =
+            (shouldValidateSource && sourceType === 'mssql') ||
+            (shouldValidateTarget && targetType === 'mssql');
+          if (validateMssql) {
+            var authType = valueOf('mssql_auth_type') || 'sql';
+            if (!valueOf('mssql_host') || !valueOf('mssql_database')) {
+              return 'For MSSQL, enter host and database.';
+            }
+            if (authType === 'sql' && (!valueOf('mssql_user') || !document.getElementById('mssql_password').value)) {
+              return 'For MSSQL SQL authentication, enter user and password.';
+            }
+          }
+          return '';
+        }
+
         var sourceSelect = document.getElementById('source_type');
         var targetSelect = document.getElementById('target_type');
         var sections = document.querySelectorAll('.credential-section');
+
+        function sectionVisibleForTab(forRole, showByType) {
+          if (!showByType) return false;
+          if (activeParamTab === 'all') return true;
+          if (activeParamTab === 'source') return forRole === 'source' || forRole === 'both';
+          if (activeParamTab === 'target') return forRole === 'target' || forRole === 'both';
+          return true;
+        }
 
         function updateVisibility() {
           var source = sourceSelect.value;
@@ -516,10 +878,11 @@
           sections.forEach(function (section) {
             var forRole = section.getAttribute('data-for');
             var type = section.getAttribute('data-type');
-            var show = false;
-            if (forRole === 'source' && type === source) show = true;
-            if (forRole === 'target' && type === target) show = true;
-            if (forRole === 'both' && (type === source || type === target)) show = true;
+            var showByType = false;
+            if (forRole === 'source' && type === source) showByType = true;
+            if (forRole === 'target' && type === target) showByType = true;
+            if (forRole === 'both' && (type === source || type === target)) showByType = true;
+            var show = sectionVisibleForTab(forRole, showByType);
             section.classList.toggle('hidden', !show);
 
             var inputs = section.querySelectorAll('input, select');
@@ -684,6 +1047,30 @@
 
         sourceSelect.addEventListener('change', updateVisibility);
         targetSelect.addEventListener('change', updateVisibility);
+        if (launchWorkspaceBtn) {
+          launchWorkspaceBtn.addEventListener('click', launchWorkspace);
+        }
+        if (launchFromPresentationBtn) {
+          launchFromPresentationBtn.addEventListener('click', launchWorkspace);
+        }
+        if (presentationModeBtn) {
+          presentationModeBtn.addEventListener('click', enterPresentationMode);
+        }
+        if (exitPresentationBtn) {
+          exitPresentationBtn.addEventListener('click', exitPresentationMode);
+        }
+        paramTabs.forEach(function (tabBtn) {
+          tabBtn.addEventListener('click', function () {
+            activeParamTab = tabBtn.getAttribute('data-tab') || 'all';
+            paramTabs.forEach(function (btn) {
+              btn.classList.toggle('active', btn === tabBtn);
+            });
+            updateVisibility();
+          });
+        });
+        if (mappingForm) {
+          mappingForm.addEventListener('submit', submitGenerateMapping);
+        }
         if (mssqlAuthSelect) {
           mssqlAuthSelect.addEventListener('change', updateMssqlAuth);
         }

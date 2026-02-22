@@ -1,3 +1,5 @@
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict
 
 from fastapi import FastAPI, HTTPException, Request, Form
@@ -197,6 +199,65 @@ def health_version():
     }
 
 
+@app.get("/security/notes", response_class=HTMLResponse)
+def security_notes():
+    return """
+    <html>
+      <head><title>Security Notes</title></head>
+      <body style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2>Security Notes</h2>
+        <p>This tool runs locally, does not persist credentials to a database, and masks sensitive values in logs.</p>
+        <p>For full guidance, refer to SECURITY_CONSIDERATIONS.md in the project root.</p>
+      </body>
+    </html>
+    """
+
+
+def _build_mapping_dataframe(request: GenerateMappingRequest):
+    metadata_service = MetadataService()
+
+    if request.source_type == SourceType.salesforce:
+        source_creds = request.salesforce_credentials
+    elif request.source_type == SourceType.mssql:
+        source_creds = request.mssql_credentials
+    else:
+        source_creds = request.mysql_credentials
+
+    if request.target_type == TargetType.redshift:
+        target_creds = request.redshift_credentials
+    elif request.target_type == TargetType.mssql:
+        target_creds = request.mssql_credentials
+    else:
+        target_creds = request.mysql_credentials
+
+    source_df = metadata_service.get_source_metadata(
+        source_type=request.source_type,
+        credentials=source_creds,
+        object_name=request.source_object,
+    )
+    target_df = metadata_service.get_target_metadata(
+        target_type=request.target_type,
+        credentials=target_creds,
+        table_name=request.target_table,
+    )
+
+    mapping_engine = MappingEngine()
+    return mapping_engine.generate_mapping(
+        source_df=source_df,
+        target_df=target_df,
+        source_object=request.source_object,
+        target_table=request.target_table,
+    )
+
+
+def _save_excel_to_desktop(excel_bytes: bytes, filename: str) -> str:
+    desktop = Path.home() / "Desktop"
+    target_dir = desktop if desktop.exists() else Path.home()
+    file_path = target_dir / filename
+    file_path.write_bytes(excel_bytes)
+    return str(file_path)
+
+
 def _build_request_from_form(form_data: dict) -> GenerateMappingRequest:
     """Build GenerateMappingRequest from UI form data (all fields optional where not used)."""
     source_type = SourceType(form_data.get("source_type", "salesforce"))
@@ -268,40 +329,7 @@ def generate_mapping(request: GenerateMappingRequest):
     otherwise return an Excel file.
     """
     try:
-        metadata_service = MetadataService()
-
-        if request.source_type == SourceType.salesforce:
-            source_creds = request.salesforce_credentials
-        elif request.source_type == SourceType.mssql:
-            source_creds = request.mssql_credentials
-        else:
-            source_creds = request.mysql_credentials
-
-        if request.target_type == TargetType.redshift:
-            target_creds = request.redshift_credentials
-        elif request.target_type == TargetType.mssql:
-            target_creds = request.mssql_credentials
-        else:
-            target_creds = request.mysql_credentials
-
-        source_df = metadata_service.get_source_metadata(
-            source_type=request.source_type,
-            credentials=source_creds,
-            object_name=request.source_object,
-        )
-        target_df = metadata_service.get_target_metadata(
-            target_type=request.target_type,
-            credentials=target_creds,
-            table_name=request.target_table,
-        )
-
-        mapping_engine = MappingEngine()
-        mapping_df = mapping_engine.generate_mapping(
-            source_df=source_df,
-            target_df=target_df,
-            source_object=request.source_object,
-            target_table=request.target_table,
-        )
+        mapping_df = _build_mapping_dataframe(request)
 
         if request.preview:
             preview = MappingPreviewResponse.from_dataframe(mapping_df)
@@ -324,6 +352,13 @@ def generate_mapping(request: GenerateMappingRequest):
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001
+        logger.exception(
+            "Mapping generation failed | source_type=%s | target_type=%s | source_object=%s | target_table=%s",
+            request.source_type,
+            request.target_type,
+            request.source_object,
+            request.target_table,
+        )
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
@@ -338,30 +373,54 @@ async def ui_generate_mapping(request: Request):
     """
     content_type = request.headers.get("content-type", "")
 
-    if "application/json" in content_type:
-        body = await request.json()
-        gen_request = GenerateMappingRequest(**body)
-    else:
-        form = await request.form()
-        form_data = {}
-        for k, v in form.items():
-            if isinstance(v, str):
-                form_data[k] = v
-            elif hasattr(v, "read"):
-                continue  # skip file uploads
-            else:
-                form_data[k] = v[0] if isinstance(v, (list, tuple)) and v else ""
-        # Ensure all expected keys exist so _build_request_from_form never KeyErrors
-        for key in (
-            "source_type", "target_type", "source_object", "target_table",
-            "sf_username", "sf_password", "sf_security_token", "sf_domain",
-            "rs_host", "rs_port", "rs_database", "rs_user", "rs_password", "rs_schema",
-            "mssql_host", "mssql_port", "mssql_database", "mssql_user", "mssql_password", "mssql_schema",
-            "mssql_auth_type", "mssql_driver",
-            "mysql_host", "mysql_port", "mysql_database", "mysql_user", "mysql_password", "mysql_schema",
-        ):
-            form_data.setdefault(key, "")
-        gen_request = _build_request_from_form(form_data)
+    try:
+        if "application/json" in content_type:
+            body = await request.json()
+            gen_request = GenerateMappingRequest(**body)
+        else:
+            form = await request.form()
+            form_data = {}
+            for k, v in form.items():
+                if isinstance(v, str):
+                    form_data[k] = v
+                elif hasattr(v, "read"):
+                    continue  # skip file uploads
+                else:
+                    form_data[k] = v[0] if isinstance(v, (list, tuple)) and v else ""
+            # Ensure all expected keys exist so _build_request_from_form never KeyErrors
+            for key in (
+                "source_type", "target_type", "source_object", "target_table",
+                "sf_username", "sf_password", "sf_security_token", "sf_domain",
+                "rs_host", "rs_port", "rs_database", "rs_user", "rs_password", "rs_schema",
+                "mssql_host", "mssql_port", "mssql_database", "mssql_user", "mssql_password", "mssql_schema",
+                "mssql_auth_type", "mssql_driver",
+                "mysql_host", "mysql_port", "mysql_database", "mysql_user", "mysql_password", "mysql_schema",
+            ):
+                form_data.setdefault(key, "")
+            gen_request = _build_request_from_form(form_data)
 
-    return generate_mapping(gen_request)
+        mapping_df = _build_mapping_dataframe(gen_request)
+        excel_generator = ExcelGenerator()
+        excel_bytes = excel_generator.to_excel_bytes(mapping_df)
+
+        filename = f"mapping_sheet_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        desktop_path = _save_excel_to_desktop(excel_bytes, filename)
+        logger.info("UI mapping generation succeeded | desktop_path=%s", desktop_path)
+
+        buffer = BytesIO(excel_bytes)
+        return StreamingResponse(
+            buffer,
+            media_type=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "X-Desktop-Path": desktop_path,
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("UI mapping generation failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
