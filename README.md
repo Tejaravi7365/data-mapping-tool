@@ -24,8 +24,10 @@ The UI now includes:
 - Source/Target database dropdowns
 - Dynamic connection parameter tabs (Source, Target, Both)
 - Per-connector test-connection actions
+- Password/Security token show-hide toggles for verification
 - Mapping generation with success message and download
 - Automatic desktop copy on successful UI generation
+- Workspace `Home` button to return to landing page
 
 ## Why it matters for ETL teams
 
@@ -38,11 +40,12 @@ The UI now includes:
 
 - Metadata-driven mapping for Salesforce/MSSQL/MySQL/Redshift
 - Type and name-based match logic
-- Excel export (`.xlsx`)
+- Excel export (`.xlsx`) with source/target table names in filename
 - Connection testing endpoints for all supported connectors
 - Detailed stage-based error messages and hints
 - Application logs with masked credentials
 - Build/version endpoint (`/health/version`)
+- Security notes page (`/security/notes`)
 
 ## Future Enhancements
 
@@ -138,6 +141,8 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8101 --app-dir /
 - `POST /api/test-connection/mysql`
 - `POST /generate-mapping`
 - `POST /ui/generate-mapping`
+- `GET /health/version`
+- `GET /security/notes`
 
 ## Security
 
