@@ -217,6 +217,27 @@
       input::placeholder {
         color: #6b7280;
       }
+      .password-input {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .password-input input {
+        flex: 1;
+      }
+      .password-toggle {
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        background: rgba(15, 23, 42, 0.9);
+        color: #cbd5e1;
+        font-size: 0.75rem;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .password-toggle:hover {
+        border-color: #3b82f6;
+      }
       .credential-section {
         margin-bottom: 20px;
         padding: 16px;
@@ -523,11 +544,17 @@
               </div>
               <div>
                 <label for="sf_password">Password</label>
-                <input id="sf_password" name="sf_password" type="password" placeholder="Salesforce password" />
+                <div class="password-input">
+                  <input id="sf_password" name="sf_password" type="password" placeholder="Salesforce password" />
+                  <button type="button" class="password-toggle" data-target="sf_password">Show</button>
+                </div>
               </div>
               <div>
                 <label for="sf_security_token">Security token</label>
-                <input id="sf_security_token" name="sf_security_token" type="password" placeholder="Security token" />
+                <div class="password-input">
+                  <input id="sf_security_token" name="sf_security_token" type="password" placeholder="Security token" />
+                  <button type="button" class="password-toggle" data-target="sf_security_token">Show</button>
+                </div>
                 <div class="field-hint">Profile &gt; Reset Security Token</div>
               </div>
               <div>
@@ -565,7 +592,10 @@
               </div>
               <div>
                 <label for="rs_password">Password</label>
-                <input id="rs_password" name="rs_password" type="password" placeholder="Password" />
+                <div class="password-input">
+                  <input id="rs_password" name="rs_password" type="password" placeholder="Password" />
+                  <button type="button" class="password-toggle" data-target="rs_password">Show</button>
+                </div>
               </div>
               <div>
                 <label for="rs_schema">Schema</label>
@@ -618,7 +648,10 @@
               </div>
               <div>
                 <label for="mssql_password">Password</label>
-                <input id="mssql_password" name="mssql_password" type="password" placeholder="Password" />
+                <div class="password-input">
+                  <input id="mssql_password" name="mssql_password" type="password" placeholder="Password" />
+                  <button type="button" class="password-toggle" data-target="mssql_password">Show</button>
+                </div>
               </div>
               <div>
                 <label for="mssql_schema">Schema</label>
@@ -665,7 +698,10 @@
               </div>
               <div>
                 <label for="mysql_password">Password</label>
-                <input id="mysql_password" name="mysql_password" type="password" placeholder="Password" />
+                <div class="password-input">
+                  <input id="mysql_password" name="mysql_password" type="password" placeholder="Password" />
+                  <button type="button" class="password-toggle" data-target="mysql_password">Show</button>
+                </div>
               </div>
               <div>
                 <label for="mysql_schema">Schema (optional)</label>
@@ -682,6 +718,9 @@
             <div class="status">
               Output:&nbsp;<span>mapping_sheet.xlsx</span>
             </div>
+            <button type="button" id="back-home-btn" class="btn-secondary">
+              Home
+            </button>
             <button type="button" class="btn-secondary" onclick="window.location.href='/docs';">
               API docs
             </button>
@@ -707,7 +746,9 @@
         var launchFromPresentationBtn = document.getElementById('launch-from-presentation-btn');
         var presentationModeBtn = document.getElementById('presentation-mode-btn');
         var exitPresentationBtn = document.getElementById('exit-presentation-btn');
+        var backHomeBtn = document.getElementById('back-home-btn');
         var paramTabs = document.querySelectorAll('.param-tab');
+        var passwordToggles = document.querySelectorAll('.password-toggle');
         var activeParamTab = 'source';
         var submitStatus = document.getElementById('submit-status');
         var generateLabel = document.getElementById('generate-label');
@@ -719,6 +760,26 @@
           if (workspace) workspace.classList.remove('hidden');
           window.scrollTo({ top: 0, behavior: 'smooth' });
           updateVisibility();
+        }
+
+        function goHome() {
+          if (workspace) workspace.classList.add('hidden');
+          if (presentationPanel) presentationPanel.classList.add('hidden');
+          if (homeLanding) homeLanding.classList.remove('hidden');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function initPasswordToggles() {
+          passwordToggles.forEach(function (toggleBtn) {
+            toggleBtn.addEventListener('click', function () {
+              var targetId = toggleBtn.getAttribute('data-target');
+              var input = targetId ? document.getElementById(targetId) : null;
+              if (!input) return;
+              var show = input.type === 'password';
+              input.type = show ? 'text' : 'password';
+              toggleBtn.textContent = show ? 'Hide' : 'Show';
+            });
+          });
         }
 
         function enterPresentationMode() {
@@ -824,13 +885,13 @@
           if (!valueOf('target_table')) return 'Enter target table name.';
 
           if (shouldValidateSource && sourceType === 'salesforce') {
-            if (!valueOf('sf_username') || !document.getElementById('sf_password').value || !document.getElementById('sf_security_token').value) {
+            if (!valueOf('sf_username') || !valueOf('sf_password') || !valueOf('sf_security_token')) {
               return 'For Salesforce source, enter username, password, and security token.';
             }
           }
 
           if (shouldValidateTarget && targetType === 'redshift') {
-            if (!valueOf('rs_host') || !valueOf('rs_database') || !valueOf('rs_user') || !document.getElementById('rs_password').value) {
+            if (!valueOf('rs_host') || !valueOf('rs_database') || !valueOf('rs_user') || !valueOf('rs_password')) {
               return 'For Redshift target, enter host, database, user, and password.';
             }
           }
@@ -839,7 +900,7 @@
             (shouldValidateSource && sourceType === 'mysql') ||
             (shouldValidateTarget && targetType === 'mysql');
           if (validateMysql) {
-            if (!valueOf('mysql_host') || !valueOf('mysql_database') || !valueOf('mysql_user') || !document.getElementById('mysql_password').value) {
+            if (!valueOf('mysql_host') || !valueOf('mysql_database') || !valueOf('mysql_user') || !valueOf('mysql_password')) {
               return 'For MySQL, enter host, database, user, and password.';
             }
           }
@@ -852,7 +913,7 @@
             if (!valueOf('mssql_host') || !valueOf('mssql_database')) {
               return 'For MSSQL, enter host and database.';
             }
-            if (authType === 'sql' && (!valueOf('mssql_user') || !document.getElementById('mssql_password').value)) {
+            if (authType === 'sql' && (!valueOf('mssql_user') || !valueOf('mssql_password'))) {
               return 'For MSSQL SQL authentication, enter user and password.';
             }
           }
@@ -863,14 +924,6 @@
         var targetSelect = document.getElementById('target_type');
         var sections = document.querySelectorAll('.credential-section');
 
-        function sectionVisibleForTab(forRole, showByType) {
-          if (!showByType) return false;
-          if (activeParamTab === 'all') return true;
-          if (activeParamTab === 'source') return forRole === 'source' || forRole === 'both';
-          if (activeParamTab === 'target') return forRole === 'target' || forRole === 'both';
-          return true;
-        }
-
         function updateVisibility() {
           var source = sourceSelect.value;
           var target = targetSelect.value;
@@ -878,11 +931,20 @@
           sections.forEach(function (section) {
             var forRole = section.getAttribute('data-for');
             var type = section.getAttribute('data-type');
-            var showByType = false;
-            if (forRole === 'source' && type === source) showByType = true;
-            if (forRole === 'target' && type === target) showByType = true;
-            if (forRole === 'both' && (type === source || type === target)) showByType = true;
-            var show = sectionVisibleForTab(forRole, showByType);
+            var show = false;
+            if (forRole === 'source') {
+              show = type === source && activeParamTab !== 'target';
+            } else if (forRole === 'target') {
+              show = type === target && activeParamTab !== 'source';
+            } else if (forRole === 'both') {
+              if (activeParamTab === 'source') {
+                show = type === source;
+              } else if (activeParamTab === 'target') {
+                show = type === target;
+              } else {
+                show = type === source || type === target;
+              }
+            }
             section.classList.toggle('hidden', !show);
 
             var inputs = section.querySelectorAll('input, select');
@@ -1059,6 +1121,9 @@
         if (exitPresentationBtn) {
           exitPresentationBtn.addEventListener('click', exitPresentationMode);
         }
+        if (backHomeBtn) {
+          backHomeBtn.addEventListener('click', goHome);
+        }
         paramTabs.forEach(function (tabBtn) {
           tabBtn.addEventListener('click', function () {
             activeParamTab = tabBtn.getAttribute('data-tab') || 'all';
@@ -1071,6 +1136,7 @@
         if (mappingForm) {
           mappingForm.addEventListener('submit', submitGenerateMapping);
         }
+        initPasswordToggles();
         if (mssqlAuthSelect) {
           mssqlAuthSelect.addEventListener('change', updateMssqlAuth);
         }

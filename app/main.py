@@ -1,5 +1,6 @@
 from datetime import datetime
 from pathlib import Path
+import re
 from typing import Any, Dict
 
 from fastapi import FastAPI, HTTPException, Request, Form
@@ -258,6 +259,19 @@ def _save_excel_to_desktop(excel_bytes: bytes, filename: str) -> str:
     return str(file_path)
 
 
+def _safe_filename_part(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_-]+", "_", (value or "").strip())
+    cleaned = cleaned.strip("_")
+    return cleaned[:40] if cleaned else "unknown"
+
+
+def _mapping_filename(source_object: str, target_table: str) -> str:
+    src = _safe_filename_part(source_object)
+    tgt = _safe_filename_part(target_table)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"mapping_{src}_to_{tgt}_{ts}.xlsx"
+
+
 def _build_request_from_form(form_data: dict) -> GenerateMappingRequest:
     """Build GenerateMappingRequest from UI form data (all fields optional where not used)."""
     source_type = SourceType(form_data.get("source_type", "salesforce"))
@@ -339,7 +353,7 @@ def generate_mapping(request: GenerateMappingRequest):
         excel_bytes = excel_generator.to_excel_bytes(mapping_df)
 
         buffer = BytesIO(excel_bytes)
-        filename = "mapping_sheet.xlsx"
+        filename = _mapping_filename(request.source_object, request.target_table)
 
         return StreamingResponse(
             buffer,
@@ -403,7 +417,7 @@ async def ui_generate_mapping(request: Request):
         excel_generator = ExcelGenerator()
         excel_bytes = excel_generator.to_excel_bytes(mapping_df)
 
-        filename = f"mapping_sheet_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = _mapping_filename(gen_request.source_object, gen_request.target_table)
         desktop_path = _save_excel_to_desktop(excel_bytes, filename)
         logger.info("UI mapping generation succeeded | desktop_path=%s", desktop_path)
 
