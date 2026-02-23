@@ -20,6 +20,8 @@ Supported platforms:
 
 <img width="764" height="602" alt="image" src="https://github.com/user-attachments/assets/9d660148-972e-4a2e-85ad-981eee1f0626" />
 
+Outcome: 
+<img width="1110" height="166" alt="image" src="https://github.com/user-attachments/assets/d04ef07b-f0b4-44d0-b714-4526b1d3b65d" />
 
 
 The UI now includes:
