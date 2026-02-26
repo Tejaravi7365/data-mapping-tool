@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
 from typing import Any, Dict
@@ -28,6 +28,7 @@ from .connectors.redshift_connector import RedshiftConnector
 from .connectors.mysql_connector import MysqlConnector
 from .logging_utils import setup_logger
 from .services.datasource_store import DatasourceStore
+from .services.mapping_run_store import MappingRunStore
 from .services.user_store import UserStore
 
 
@@ -36,6 +37,7 @@ templates = Jinja2Templates(directory="app/templates")
 logger = setup_logger()
 APP_BUILD = "multi-source-v2"
 DATASOURCE_STORE = DatasourceStore()
+MAPPING_RUN_STORE = MappingRunStore()
 USER_STORE = UserStore()
 
 
@@ -60,6 +62,15 @@ def _datasource_response(profile: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _merged_credentials_for_update(existing: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, Any]:
+    merged = dict(existing or {})
+    for key, value in (incoming or {}).items():
+        if value in ("", None, "***"):
+            continue
+        merged[key] = value
+    return merged
+
+
 def _session_user(request: Request):
     return USER_STORE.get_session_user(request.cookies.get("session_token"))
 
@@ -81,6 +92,57 @@ def _require_admin_user(request: Request):
 def _datasources_for_user(user: Dict[str, Any]):
     role = user.get("role", "user")
     return [d for d in DATASOURCE_STORE.list() if d.get("owner_role", "all") in ("all", role)]
+
+
+def _parse_iso_timestamp(value: str | None) -> datetime:
+    if not value:
+        return datetime.min
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed
+    except Exception:
+        return datetime.min
+
+
+def _mapping_summary_counts(mapping_df) -> tuple[int, int]:
+    total_fields = int(len(mapping_df))
+    if "Match Status" not in mapping_df.columns:
+        return total_fields, 0
+    matched_fields = int(mapping_df["Match Status"].fillna("").str.lower().eq("matched").sum())
+    return total_fields, matched_fields
+
+
+def _resolve_datasource_name(datasource_id: str | None) -> str:
+    if not datasource_id:
+        return ""
+    profile = DATASOURCE_STORE.get(datasource_id)
+    if not profile:
+        return ""
+    return str(profile.get("name", ""))
+
+
+def _record_mapping_run(gen_request: GenerateMappingRequest, username: str, mapping_df, status: str = "Completed") -> None:
+    total_fields, matched_fields = _mapping_summary_counts(mapping_df)
+    source_name = _resolve_datasource_name(getattr(gen_request, "source_datasource_id", None))
+    target_name = _resolve_datasource_name(getattr(gen_request, "target_datasource_id", None))
+    MAPPING_RUN_STORE.create(
+        created_by=username,
+        source_type=gen_request.source_type.value,
+        target_type=gen_request.target_type.value,
+        source_datasource_id=getattr(gen_request, "source_datasource_id", None),
+        target_datasource_id=getattr(gen_request, "target_datasource_id", None),
+        source_datasource_name=source_name,
+        target_datasource_name=target_name,
+        source_database=getattr(gen_request, "source_database", None),
+        target_database=getattr(gen_request, "target_database", None),
+        source_object=gen_request.source_object,
+        target_table=gen_request.target_table,
+        total_fields=total_fields,
+        matched_fields=matched_fields,
+        status=status,
+    )
 
 
 def _extract_hint(connection_type: str, exc_text: str) -> str:
@@ -479,6 +541,34 @@ async def create_datasource(request: Request):
     return _datasource_response(created)
 
 
+@app.put("/api/datasources/{datasource_id}")
+async def update_datasource(datasource_id: str, request: Request):
+    _require_admin_user(request)
+    payload = await request.json()
+    existing = DATASOURCE_STORE.get(datasource_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail=f"Datasource '{datasource_id}' not found")
+
+    name = str(payload.get("name", existing.get("name", ""))).strip()
+    connection_type = str(payload.get("connection_type", existing.get("connection_type", ""))).strip().lower()
+    incoming_credentials = payload.get("credentials") or {}
+    owner_role = str(payload.get("owner_role", existing.get("owner_role", "all"))).strip().lower()
+    if not name or not connection_type or not isinstance(incoming_credentials, dict):
+        raise HTTPException(status_code=400, detail="name, connection_type, and credentials are required")
+
+    credentials = _merged_credentials_for_update(existing.get("credentials", {}), incoming_credentials)
+    updated = DATASOURCE_STORE.update(
+        datasource_id=datasource_id,
+        name=name,
+        connection_type=connection_type,
+        credentials=credentials,
+        owner_role=owner_role if owner_role in ("all", "admin", "user") else "all",
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Datasource '{datasource_id}' not found")
+    return _datasource_response(updated)
+
+
 @app.delete("/api/datasources/{datasource_id}")
 def delete_datasource(datasource_id: str, request: Request):
     _require_admin_user(request)
@@ -500,17 +590,23 @@ def datasource_schemas(datasource_id: str, request: Request, database: str | Non
         if ds.get("connection_type") == "mysql":
             creds["schema"] = database
     ctype = ds.get("connection_type")
-    if ctype == "salesforce":
-        schemas = SalesforceConnector(creds).list_schemas()
-    elif ctype == "mssql":
-        schemas = MssqlConnector(creds).list_schemas()
-    elif ctype == "mysql":
-        schemas = MysqlConnector(creds).list_schemas()
-    elif ctype == "redshift":
-        schemas = RedshiftConnector(creds).list_schemas()
-    else:
-        raise HTTPException(status_code=400, detail=f"Unsupported datasource type: {ctype}")
-    return {"datasource_id": datasource_id, "database": database, "schemas": schemas}
+    try:
+        if ctype == "salesforce":
+            schemas = SalesforceConnector(creds).list_schemas()
+        elif ctype == "mssql":
+            schemas = MssqlConnector(creds).list_schemas()
+        elif ctype == "mysql":
+            schemas = MysqlConnector(creds).list_schemas()
+        elif ctype == "redshift":
+            schemas = RedshiftConnector(creds).list_schemas()
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported datasource type: {ctype}")
+        return {"datasource_id": datasource_id, "database": database, "schemas": schemas}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Datasource schema discovery failed | datasource_id=%s", datasource_id)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get("/api/datasources/{datasource_id}/databases")
@@ -521,17 +617,23 @@ def datasource_databases(datasource_id: str, request: Request):
         raise HTTPException(status_code=404, detail=f"Datasource '{datasource_id}' not found")
     creds = dict(ds.get("credentials", {}))
     ctype = ds.get("connection_type")
-    if ctype == "salesforce":
-        databases = SalesforceConnector(creds).list_databases()
-    elif ctype == "mssql":
-        databases = MssqlConnector(creds).list_databases()
-    elif ctype == "mysql":
-        databases = MysqlConnector(creds).list_databases()
-    elif ctype == "redshift":
-        databases = RedshiftConnector(creds).list_databases()
-    else:
-        raise HTTPException(status_code=400, detail=f"Unsupported datasource type: {ctype}")
-    return {"datasource_id": datasource_id, "databases": databases}
+    try:
+        if ctype == "salesforce":
+            databases = SalesforceConnector(creds).list_databases()
+        elif ctype == "mssql":
+            databases = MssqlConnector(creds).list_databases()
+        elif ctype == "mysql":
+            databases = MysqlConnector(creds).list_databases()
+        elif ctype == "redshift":
+            databases = RedshiftConnector(creds).list_databases()
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported datasource type: {ctype}")
+        return {"datasource_id": datasource_id, "databases": databases}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Datasource database discovery failed | datasource_id=%s", datasource_id)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get("/api/datasources/{datasource_id}/tables")
@@ -553,18 +655,115 @@ def datasource_tables(
     ctype = ds.get("connection_type")
     if schema:
         creds["schema"] = schema
-    if ctype == "salesforce":
-        tables = SalesforceConnector(creds).list_tables(schema)
-    elif ctype == "mssql":
-        tables = MssqlConnector(creds).list_tables(schema)
-    elif ctype == "mysql":
-        tables = MysqlConnector(creds).list_tables(schema)
-    elif ctype == "redshift":
-        s = schema or creds.get("schema") or "public"
-        tables = RedshiftConnector(creds).list_tables_for_schema(s)
-    else:
-        raise HTTPException(status_code=400, detail=f"Unsupported datasource type: {ctype}")
-    return {"datasource_id": datasource_id, "database": database, "schema": schema, "tables": tables}
+    try:
+        if ctype == "salesforce":
+            tables = SalesforceConnector(creds).list_tables(schema)
+        elif ctype == "mssql":
+            tables = MssqlConnector(creds).list_tables(schema)
+        elif ctype == "mysql":
+            tables = MysqlConnector(creds).list_tables(schema)
+        elif ctype == "redshift":
+            s = schema or creds.get("schema") or "public"
+            tables = RedshiftConnector(creds).list_tables_for_schema(s)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported datasource type: {ctype}")
+        return {"datasource_id": datasource_id, "database": database, "schema": schema, "tables": tables}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Datasource table discovery failed | datasource_id=%s", datasource_id)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/datasources/discover")
+async def discover_datasource_options(request: Request):
+    _require_admin_user(request)
+    payload = await request.json()
+    connection_type = str(payload.get("connection_type", "")).strip().lower()
+    credentials = payload.get("credentials") or {}
+    database = payload.get("database")
+    if not connection_type or not isinstance(credentials, dict):
+        raise HTTPException(status_code=400, detail="connection_type and credentials are required")
+
+    creds = dict(credentials)
+    if database:
+        creds["database"] = database
+        if connection_type == "mysql":
+            creds["schema"] = database
+
+    try:
+        if connection_type == "salesforce":
+            connector = SalesforceConnector(creds)
+        elif connection_type == "mssql":
+            connector = MssqlConnector(creds)
+        elif connection_type == "mysql":
+            connector = MysqlConnector(creds)
+        elif connection_type == "redshift":
+            connector = RedshiftConnector(creds)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported datasource type: {connection_type}")
+
+        try:
+            databases = connector.list_databases()
+        except Exception:
+            databases = []
+        try:
+            schemas = connector.list_schemas()
+        except Exception:
+            schemas = []
+        return {"connection_type": connection_type, "database": database, "databases": databases, "schemas": schemas}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Datasource discovery failed | type=%s", connection_type)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/dashboard/metrics")
+def dashboard_metrics(request: Request):
+    user = _require_session_user(request)
+    user_runs = MAPPING_RUN_STORE.list_for_user(user.get("username", ""), user.get("role", "user"))
+    total_mappings = len(user_runs)
+    completed_runs = [r for r in user_runs if str(r.get("status", "")).lower() == "completed"]
+    success_rate = round((len(completed_runs) / total_mappings) * 100, 1) if total_mappings else 0.0
+    pending_reviews = len([r for r in user_runs if str(r.get("status", "")).lower() in ("pending review", "review")])
+    active_connections = len(_datasources_for_user(user))
+
+    by_day: Dict[str, int] = {}
+    today = datetime.utcnow().date()
+    for offset in range(6, -1, -1):
+        day = today - timedelta(days=offset)
+        by_day[day.isoformat()] = 0
+    for run in user_runs:
+        created_at = _parse_iso_timestamp(str(run.get("created_at", "")))
+        if created_at == datetime.min:
+            continue
+        day_key = created_at.date().isoformat()
+        if day_key in by_day:
+            by_day[day_key] += 1
+
+    total_fields = sum(int(r.get("total_fields", 0) or 0) for r in user_runs)
+    matched_fields = sum(int(r.get("matched_fields", 0) or 0) for r in user_runs)
+    mismatched_fields = max(total_fields - matched_fields, 0)
+
+    recent_runs = sorted(user_runs, key=lambda r: _parse_iso_timestamp(str(r.get("created_at", ""))), reverse=True)[:5]
+    return {
+        "total_mappings": total_mappings,
+        "success_rate": success_rate,
+        "active_connections": active_connections,
+        "pending_reviews": pending_reviews,
+        "trends": [{"day": k, "count": v} for k, v in by_day.items()],
+        "distribution": {"matched_fields": matched_fields, "mismatched_fields": mismatched_fields},
+        "recent_runs": recent_runs,
+    }
+
+
+@app.get("/api/mapping-runs")
+def mapping_runs(request: Request):
+    user = _require_session_user(request)
+    rows = MAPPING_RUN_STORE.list_for_user(user.get("username", ""), user.get("role", "user"))
+    rows = sorted(rows, key=lambda r: _parse_iso_timestamp(str(r.get("created_at", ""))), reverse=True)
+    return {"runs": rows}
 
 
 @app.get("/api/admin/users")
@@ -653,10 +852,14 @@ def _build_mapping_dataframe(request: GenerateMappingRequest):
         source_creds["database"] = request.source_database
         if request.source_type == SourceType.mysql:
             source_creds["schema"] = request.source_database
+    if getattr(request, "source_schema", None):
+        source_creds["schema"] = request.source_schema
     if getattr(request, "target_database", None):
         target_creds["database"] = request.target_database
         if request.target_type == TargetType.mysql:
             target_creds["schema"] = request.target_database
+    if getattr(request, "target_schema", None):
+        target_creds["schema"] = request.target_schema
 
     source_df = metadata_service.get_source_metadata(
         source_type=request.source_type,
@@ -713,6 +916,8 @@ def _build_request_from_form(form_data: dict) -> GenerateMappingRequest:
         "target_datasource_id": (form_data.get("target_datasource_id") or "").strip() or None,
         "source_database": (form_data.get("source_database") or "").strip() or None,
         "target_database": (form_data.get("target_database") or "").strip() or None,
+        "source_schema": (form_data.get("source_schema") or "").strip() or None,
+        "target_schema": (form_data.get("target_schema") or "").strip() or None,
         "source_object": form_data.get("source_object", ""),
         "target_table": form_data.get("target_table", ""),
         "preview": False,
@@ -769,7 +974,7 @@ def _build_request_from_form(form_data: dict) -> GenerateMappingRequest:
         }
     },
 )
-def generate_mapping(request: GenerateMappingRequest):
+def generate_mapping(request: GenerateMappingRequest, http_request: Request):
     """
     Generate a mapping sheet between a source (Salesforce, MSSQL, MySQL) and
     a target (Redshift, MSSQL, MySQL). If request.preview is True, return JSON;
@@ -781,6 +986,10 @@ def generate_mapping(request: GenerateMappingRequest):
         if request.preview:
             preview = MappingPreviewResponse.from_dataframe(mapping_df)
             return JSONResponse(content=preview.dict())
+
+        session_user = _session_user(http_request)
+        username = (session_user or {}).get("username", "system")
+        _record_mapping_run(request, username, mapping_df, status="Completed")
 
         excel_generator = ExcelGenerator()
         excel_bytes = excel_generator.to_excel_bytes(mapping_df)
@@ -850,6 +1059,10 @@ async def ui_generate_mapping(request: Request):
             gen_request = _build_request_from_form(form_data)
 
         mapping_df = _build_mapping_dataframe(gen_request)
+        session_user = _session_user(request)
+        username = (session_user or {}).get("username", "system")
+        _record_mapping_run(gen_request, username, mapping_df, status="Completed")
+
         excel_generator = ExcelGenerator()
         excel_bytes = excel_generator.to_excel_bytes(mapping_df)
 

@@ -16,6 +16,7 @@
       table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
       th, td { text-align: left; padding: 9px; border-bottom: 1px solid #1f2937; }
       .sub { color: #94a3b8; margin-bottom: 10px; font-size: 0.9rem; }
+      .msg { color: #93c5fd; margin-bottom: 8px; font-size: 0.85rem; }
     </style>
   </head>
   <body>
@@ -35,20 +36,69 @@
       <div class="main">
         <h2 style="margin:0 0 4px 0;">Mapping History</h2>
         <div class="sub">View and monitor previous mapping runs</div>
+        <div class="msg" id="msg"></div>
         <div class="card">
           <table>
             <thead>
-              <tr><th>Run ID</th><th>Date/Time</th><th>User</th><th>Source DB</th><th>Target DB</th><th>Tables</th><th>Status</th></tr>
+              <tr><th>Run ID</th><th>Date/Time</th><th>User</th><th>Source DB</th><th>Target DB</th><th>Fields</th><th>Status</th></tr>
             </thead>
-            <tbody>
-              <tr><td>MAP-2456</td><td>2026-02-25 14:32</td><td>{{ username }}</td><td>prod_analytics</td><td>warehouse_v2</td><td>15</td><td>Completed</td></tr>
-              <tr><td>MAP-2455</td><td>2026-02-24 19:15</td><td>Jane Doe</td><td>legacy_crm</td><td>new_crm</td><td>28</td><td>Completed</td></tr>
-              <tr><td>MAP-2454</td><td>2026-02-23 16:10</td><td>Admin User</td><td>ecommerce_db</td><td>analytics_db</td><td>12</td><td>Reviewed</td></tr>
-              <tr><td>MAP-2453</td><td>2026-02-22 12:30</td><td>Jane Doe</td><td>finance_db</td><td>reporting_db</td><td>8</td><td>Completed</td></tr>
-            </tbody>
+            <tbody id="history_body"></tbody>
           </table>
         </div>
       </div>
     </div>
+    <script>
+      (function () {
+        var msgEl = document.getElementById('msg');
+        var bodyEl = document.getElementById('history_body');
+
+        function show(msg, isErr) {
+          msgEl.textContent = msg || '';
+          msgEl.style.color = isErr ? '#fca5a5' : '#93c5fd';
+        }
+
+        function fmtDateTime(isoTs) {
+          var d = new Date(isoTs || '');
+          if (Number.isNaN(d.getTime())) return '-';
+          return d.toISOString().replace('T', ' ').slice(0, 16);
+        }
+
+        function load() {
+          fetch('/api/mapping-runs')
+            .then(function (r) {
+              if (!r.ok) throw new Error('Failed to load mapping history');
+              return r.json();
+            })
+            .then(function (data) {
+              var rows = data.runs || [];
+              if (!rows.length) {
+                bodyEl.innerHTML = '<tr><td colspan="7" class="sub">No mapping runs available yet.</td></tr>';
+                return;
+              }
+              bodyEl.innerHTML = rows.map(function (r) {
+                var sourceDb = r.source_database || r.source_datasource_name || '-';
+                var targetDb = r.target_database || r.target_datasource_name || '-';
+                var fields = String(r.matched_fields || 0) + ' / ' + String(r.total_fields || 0);
+                return '<tr>' +
+                  '<td>' + (r.run_id || '-') + '</td>' +
+                  '<td>' + fmtDateTime(r.created_at) + '</td>' +
+                  '<td>' + (r.created_by || '-') + '</td>' +
+                  '<td>' + sourceDb + '</td>' +
+                  '<td>' + targetDb + '</td>' +
+                  '<td>' + fields + '</td>' +
+                  '<td>' + (r.status || '-') + '</td>' +
+                '</tr>';
+              }).join('');
+              show('');
+            })
+            .catch(function (e) {
+              show(e.message || 'Unable to load mapping history', true);
+              bodyEl.innerHTML = '<tr><td colspan="7" class="sub">Unable to load mapping runs.</td></tr>';
+            });
+        }
+
+        load();
+      })();
+    </script>
   </body>
 </html>

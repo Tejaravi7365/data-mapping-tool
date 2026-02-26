@@ -14,12 +14,13 @@ class MysqlConnector:
         self._credentials = credentials
 
     def _get_connection(self):
+        database = self._credentials.get("database") or None
         return pymysql.connect(
             host=self._credentials["host"],
             port=self._credentials.get("port", 3306),
             user=self._credentials["user"],
             password=self._credentials["password"],
-            database=self._credentials["database"],
+            database=database,
         )
 
     def get_table_metadata(self, table_name: str) -> pd.DataFrame:

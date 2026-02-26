@@ -17,7 +17,7 @@
       .subtitle { color: #94a3b8; font-size: 0.9rem; margin-bottom: 14px; }
       .card { background: #0f172a; border: 1px solid #1f2937; border-radius: 10px; padding: 14px; margin-bottom: 12px; }
       .card h4 { margin: 0 0 10px 0; }
-      .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+      .row { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; }
       label { display: block; font-size: 0.8rem; color: #cbd5e1; margin-bottom: 4px; }
       input, select, textarea { width: 100%; box-sizing: border-box; background: #111827; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; padding: 8px; }
       textarea { min-height: 84px; }
@@ -60,6 +60,10 @@
               <select id="source_database"></select>
             </div>
             <div>
+              <label>Schema</label>
+              <select id="source_schema"></select>
+            </div>
+            <div>
               <label>Table / Object</label>
               <input id="source_table" list="source_table_list" placeholder="Select or type table/object" />
               <datalist id="source_table_list"></datalist>
@@ -77,6 +81,10 @@
             <div>
               <label>Database</label>
               <select id="target_database"></select>
+            </div>
+            <div>
+              <label>Schema</label>
+              <select id="target_schema"></select>
             </div>
             <div>
               <label>Table</label>
@@ -116,6 +124,8 @@
         var targetDs = document.getElementById('target_ds');
         var sourceDatabase = document.getElementById('source_database');
         var targetDatabase = document.getElementById('target_database');
+        var sourceSchema = document.getElementById('source_schema');
+        var targetSchema = document.getElementById('target_schema');
         var sourceTable = document.getElementById('source_table');
         var targetTable = document.getElementById('target_table');
         var sourceList = document.getElementById('source_table_list');
@@ -127,6 +137,24 @@
         function setStatus(msg, isErr) {
           statusEl.textContent = msg || '';
           statusEl.style.color = isErr ? '#fca5a5' : '#93c5fd';
+        }
+
+        function parseMaybeJson(text) {
+          if (!text) return null;
+          try { return JSON.parse(text); } catch (e) { return null; }
+        }
+
+        function requestJson(url, options) {
+          return fetch(url, options).then(function (response) {
+            return response.text().then(function (text) {
+              var payload = parseMaybeJson(text);
+              if (!response.ok) {
+                var detail = (payload && payload.detail) || text || (response.status + ' ' + response.statusText);
+                throw new Error(detail);
+              }
+              return payload || {};
+            });
+          });
         }
 
         function optionHtml(value, label, selected) {
@@ -147,6 +175,12 @@
           selectEl.innerHTML = html.join('');
         }
 
+        function fillSchemaSelect(selectEl, schemas) {
+          var html = [optionHtml('', '-- Select schema --', true)];
+          (schemas || []).forEach(function (s) { html.push(optionHtml(s, s, false)); });
+          selectEl.innerHTML = html.join('');
+        }
+
         function fillTableList(listEl, rows) {
           listEl.innerHTML = '';
           (rows || []).forEach(function (t) {
@@ -161,8 +195,7 @@
             fillDatabaseSelect(databaseSelectEl, []);
             return Promise.resolve();
           }
-          return fetch('/api/datasources/' + dsId + '/databases')
-            .then(function (r) { return r.json(); })
+          return requestJson('/api/datasources/' + dsId + '/databases')
             .then(function (d) {
               var values = d.databases || [];
               fillDatabaseSelect(databaseSelectEl, values);
@@ -172,15 +205,34 @@
             });
         }
 
-        function loadTables(dsId, database, listEl) {
+        function loadSchemas(dsId, database, schemaSelectEl) {
+          if (!dsId) {
+            fillSchemaSelect(schemaSelectEl, []);
+            return Promise.resolve();
+          }
+          var url = '/api/datasources/' + dsId + '/schemas';
+          if (database) url += '?database=' + encodeURIComponent(database);
+          return requestJson(url)
+            .then(function (d) {
+              var values = d.schemas || [];
+              fillSchemaSelect(schemaSelectEl, values);
+              if (values.length === 1) {
+                schemaSelectEl.value = values[0];
+              }
+            });
+        }
+
+        function loadTables(dsId, database, schema, listEl) {
           if (!dsId) {
             fillTableList(listEl, []);
             return Promise.resolve();
           }
           var url = '/api/datasources/' + dsId + '/tables';
-          if (database) url += '?database=' + encodeURIComponent(database);
-          return fetch(url)
-            .then(function (r) { return r.json(); })
+          var params = [];
+          if (database) params.push('database=' + encodeURIComponent(database));
+          if (schema) params.push('schema=' + encodeURIComponent(schema));
+          if (params.length) url += '?' + params.join('&');
+          return requestJson(url)
             .then(function (d) { fillTableList(listEl, d.tables || []); });
         }
 
@@ -190,8 +242,7 @@
         }
 
         function loadDatasources() {
-          fetch('/api/datasources')
-            .then(function (r) { return r.json(); })
+          requestJson('/api/datasources')
             .then(function (d) {
               var rows = d.datasources || [];
               datasourceMap = {};
@@ -205,20 +256,34 @@
         sourceDs.addEventListener('change', function () {
           sourceTable.value = '';
           loadDatabases(sourceDs.value, sourceDatabase).then(function () {
-            return loadTables(sourceDs.value, sourceDatabase.value, sourceList);
+            return loadSchemas(sourceDs.value, sourceDatabase.value, sourceSchema);
+          }).then(function () {
+            return loadTables(sourceDs.value, sourceDatabase.value, sourceSchema.value, sourceList);
           });
         });
         targetDs.addEventListener('change', function () {
           targetTable.value = '';
           loadDatabases(targetDs.value, targetDatabase).then(function () {
-            return loadTables(targetDs.value, targetDatabase.value, targetList);
+            return loadSchemas(targetDs.value, targetDatabase.value, targetSchema);
+          }).then(function () {
+            return loadTables(targetDs.value, targetDatabase.value, targetSchema.value, targetList);
           });
         });
         sourceDatabase.addEventListener('change', function () {
-          loadTables(sourceDs.value, sourceDatabase.value, sourceList);
+          loadSchemas(sourceDs.value, sourceDatabase.value, sourceSchema).then(function () {
+            return loadTables(sourceDs.value, sourceDatabase.value, sourceSchema.value, sourceList);
+          });
         });
         targetDatabase.addEventListener('change', function () {
-          loadTables(targetDs.value, targetDatabase.value, targetList);
+          loadSchemas(targetDs.value, targetDatabase.value, targetSchema).then(function () {
+            return loadTables(targetDs.value, targetDatabase.value, targetSchema.value, targetList);
+          });
+        });
+        sourceSchema.addEventListener('change', function () {
+          loadTables(sourceDs.value, sourceDatabase.value, sourceSchema.value, sourceList);
+        });
+        targetSchema.addEventListener('change', function () {
+          loadTables(targetDs.value, targetDatabase.value, targetSchema.value, targetList);
         });
 
         generateBtn.addEventListener('click', function () {
@@ -234,6 +299,8 @@
             target_datasource_id: targetDs.value,
             source_database: sourceDatabase.value || null,
             target_database: targetDatabase.value || null,
+            source_schema: sourceSchema.value || null,
+            target_schema: targetSchema.value || null,
             source_object: sourceTable.value.trim(),
             target_table: targetTable.value.trim(),
             preview: false
@@ -247,8 +314,9 @@
           })
             .then(function (response) {
               if (!response.ok) {
-                return response.json().then(function (err) {
-                  throw new Error((err && err.detail) || 'Generate failed');
+                return response.text().then(function (text) {
+                  var err = parseMaybeJson(text);
+                  throw new Error((err && err.detail) || text || 'Generate failed');
                 });
               }
               var disposition = response.headers.get('content-disposition') || '';

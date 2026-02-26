@@ -82,11 +82,22 @@
               <option value="user">user</option>
             </select>
           </div>
-          <div></div>
+          <div id="cred_hint" class="small" style="display:flex;align-items:flex-end;">Enter connection parameters (no JSON required).</div>
         </div>
-        <div style="margin-top:8px;">
-          <label>Credentials JSON</label>
-          <textarea id="ds_credentials" placeholder='{"host":"localhost","database":"mydb","user":"u","password":"p"}'></textarea>
+        <div id="credential_fields" style="margin-top:8px;"></div>
+        <div class="row" style="margin-top:8px;">
+          <div>
+            <label>Default Database (optional)</label>
+            <select id="ds_database"></select>
+          </div>
+          <div>
+            <label>Default Schema (optional)</label>
+            <select id="ds_schema"></select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button type="button" id="discover_databases" class="btn" style="background:#334155;">Load Databases</button>
+          <button type="button" id="discover_schemas" class="btn" style="background:#334155;">Load Schemas</button>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
           <button type="button" id="cancel_modal" class="btn" style="background:#334155;">Cancel</button>
@@ -100,85 +111,320 @@
         var cardsEl = document.getElementById('cards');
         var msgEl = document.getElementById('msg');
         var modal = document.getElementById('create_modal');
-        function show(msg, isErr) { msgEl.textContent = msg || ''; msgEl.style.color = isErr ? '#fca5a5' : '#93c5fd'; }
+        var modalTitleEl = modal.querySelector('h3');
+        var submitBtn = document.getElementById('create_ds_btn');
+        var credentialFieldsEl = document.getElementById('credential_fields');
+        var dsNameEl = document.getElementById('ds_name');
+        var dsTypeEl = document.getElementById('ds_type');
+        var dsOwnerRoleEl = document.getElementById('ds_owner_role');
+        var dsDatabaseEl = document.getElementById('ds_database');
+        var dsSchemaEl = document.getElementById('ds_schema');
+        var editingDatasourceId = null;
+        var datasourceById = {};
+        var secretKeys = { password: true, security_token: true };
+        var fieldDefs = {
+          mssql: [
+            { key: 'host', label: 'Host / Instance', placeholder: 'e.g. localhost or localhost\\SQLEXPRESS' },
+            { key: 'port', label: 'Port', placeholder: '1433' },
+            { key: 'auth_type', label: 'Auth Type', type: 'select', options: ['sql', 'windows'] },
+            { key: 'user', label: 'User', placeholder: 'SQL username (for sql auth)' },
+            { key: 'password', label: 'Password', placeholder: 'Leave blank to keep existing password', inputType: 'password' },
+            { key: 'driver', label: 'ODBC Driver (optional)', placeholder: 'e.g. ODBC Driver 18 for SQL Server' }
+          ],
+          mysql: [
+            { key: 'host', label: 'Host', placeholder: 'e.g. localhost' },
+            { key: 'port', label: 'Port', placeholder: '3306' },
+            { key: 'user', label: 'User', placeholder: 'MySQL username' },
+            { key: 'password', label: 'Password', placeholder: 'Leave blank to keep existing password', inputType: 'password' }
+          ],
+          redshift: [
+            { key: 'host', label: 'Host', placeholder: 'cluster.region.redshift.amazonaws.com' },
+            { key: 'port', label: 'Port', placeholder: '5439' },
+            { key: 'database', label: 'Database', placeholder: 'dev' },
+            { key: 'user', label: 'User', placeholder: 'Redshift user' },
+            { key: 'password', label: 'Password', placeholder: 'Leave blank to keep existing password', inputType: 'password' },
+            { key: 'schema', label: 'Schema (optional)', placeholder: 'public' }
+          ],
+          salesforce: [
+            { key: 'username', label: 'Username', placeholder: 'user@example.com' },
+            { key: 'password', label: 'Password', placeholder: 'Leave blank to keep existing password', inputType: 'password' },
+            { key: 'security_token', label: 'Security Token', placeholder: 'Leave blank to keep existing token', inputType: 'password' },
+            { key: 'domain', label: 'Domain', type: 'select', options: ['login', 'test'] }
+          ]
+        };
+
+        function show(msg, isErr) {
+          msgEl.textContent = msg || '';
+          msgEl.style.color = isErr ? '#fca5a5' : '#93c5fd';
+        }
+
+        function optionHtml(value, label, selected) {
+          return '<option value="' + value + '"' + (selected ? ' selected' : '') + '>' + label + '</option>';
+        }
+
+        function fillSelect(selectEl, values, placeholder) {
+          var html = [optionHtml('', placeholder || '-- Select --', true)];
+          (values || []).forEach(function (v) { html.push(optionHtml(v, v, false)); });
+          selectEl.innerHTML = html.join('');
+        }
+
+        function parseMaybeJson(text) {
+          if (!text) return null;
+          try { return JSON.parse(text); } catch (e) { return null; }
+        }
+
+        function requestJson(url, options) {
+          return fetch(url, options).then(function (response) {
+            return response.text().then(function (text) {
+              var payload = parseMaybeJson(text);
+              if (!response.ok) {
+                var detail = (payload && payload.detail) || text || (response.status + ' ' + response.statusText);
+                throw new Error(detail);
+              }
+              return payload || {};
+            });
+          });
+        }
+
+        function renderCredentialFields() {
+          var type = dsTypeEl.value;
+          var defs = fieldDefs[type] || [];
+          var html = ['<div class="row">'];
+          defs.forEach(function (f, idx) {
+            html.push('<div><label>' + f.label + '</label>');
+            if (f.type === 'select') {
+              var opts = (f.options || []).map(function (o, i) { return optionHtml(o, o, i === 0); }).join('');
+              html.push('<select data-cred="' + f.key + '">' + opts + '</select>');
+            } else {
+              html.push('<input data-cred="' + f.key + '" type="' + (f.inputType || 'text') + '" placeholder="' + (f.placeholder || '') + '" />');
+            }
+            html.push('</div>');
+            if ((idx + 1) % 2 === 0 && idx !== defs.length - 1) html.push('</div><div class="row" style="margin-top:8px;">');
+          });
+          html.push('</div>');
+          credentialFieldsEl.innerHTML = html.join('');
+          fillSelect(dsDatabaseEl, [], '-- Discover databases --');
+          fillSelect(dsSchemaEl, [], '-- Discover schemas --');
+        }
+
+        function setCredentialValue(key, value) {
+          var el = credentialFieldsEl.querySelector('[data-cred="' + key + '"]');
+          if (!el || value === undefined || value === null) return;
+          if (secretKeys[key] && value === '***') return;
+          el.value = String(value);
+        }
+
+        function collectCredentials() {
+          var creds = {};
+          credentialFieldsEl.querySelectorAll('[data-cred]').forEach(function (el) {
+            var key = el.getAttribute('data-cred');
+            var val = (el.value || '').trim();
+            if (!val) return;
+            if (key === 'port') {
+              var num = Number(val);
+              creds[key] = Number.isFinite(num) ? num : val;
+            } else {
+              creds[key] = val;
+            }
+          });
+          var dbVal = (dsDatabaseEl.value || '').trim();
+          var schemaVal = (dsSchemaEl.value || '').trim();
+          if (dbVal) creds.database = dbVal;
+          if (schemaVal) creds.schema = schemaVal;
+          return creds;
+        }
+
+        function validateCredentials(type, creds, isEdit) {
+          var required = {
+            mssql: ['host'],
+            mysql: ['host', 'user'],
+            redshift: ['host', 'database', 'user'],
+            salesforce: ['username']
+          };
+          var missing = (required[type] || []).filter(function (k) { return !creds[k] && !isEdit; });
+          if (type === 'mssql' && (creds.auth_type || 'sql') === 'sql' && !isEdit) {
+            if (!creds.user) missing.push('user');
+            if (!creds.password) missing.push('password');
+          }
+          if (!isEdit) {
+            if (type === 'mysql' && !creds.password) missing.push('password');
+            if (type === 'redshift' && !creds.password) missing.push('password');
+            if (type === 'salesforce') {
+              if (!creds.password) missing.push('password');
+              if (!creds.security_token) missing.push('security_token');
+            }
+          }
+          return missing;
+        }
+
+        function resetModalForCreate() {
+          editingDatasourceId = null;
+          modalTitleEl.textContent = 'Create Data Source';
+          submitBtn.textContent = 'Create';
+          dsNameEl.value = '';
+          dsOwnerRoleEl.value = 'all';
+          dsTypeEl.disabled = false;
+          renderCredentialFields();
+        }
+
+        function enterCreateMode() {
+          resetModalForCreate();
+          modal.classList.add('show');
+        }
+
+        function enterEditMode(ds) {
+          editingDatasourceId = ds.id;
+          modalTitleEl.textContent = 'Edit Data Source';
+          submitBtn.textContent = 'Save Changes';
+          dsNameEl.value = ds.name || '';
+          dsTypeEl.value = ds.connection_type || 'mssql';
+          dsTypeEl.disabled = true;
+          dsOwnerRoleEl.value = ds.owner_role || 'all';
+          renderCredentialFields();
+          var creds = ds.credentials || {};
+          Object.keys(creds).forEach(function (k) { setCredentialValue(k, creds[k]); });
+          var dbVal = creds.database || '';
+          var schemaVal = creds.schema || '';
+          fillSelect(dsDatabaseEl, dbVal ? [dbVal] : [], '-- Discover databases --');
+          fillSelect(dsSchemaEl, schemaVal ? [schemaVal] : [], '-- Discover schemas --');
+          if (dbVal) dsDatabaseEl.value = dbVal;
+          if (schemaVal) dsSchemaEl.value = schemaVal;
+          modal.classList.add('show');
+        }
+
+        function discover(mode) {
+          var type = dsTypeEl.value;
+          var credentials = collectCredentials();
+          requestJson('/api/datasources/discover', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              connection_type: type,
+              credentials: credentials,
+              database: dsDatabaseEl.value || credentials.database || null
+            })
+          })
+            .then(function (data) {
+              if (mode === 'databases') {
+                var dbs = data.databases || [];
+                fillSelect(dsDatabaseEl, dbs, '-- Select database --');
+                if (dbs.length === 1) dsDatabaseEl.value = dbs[0];
+              }
+              var schemas = data.schemas || [];
+              fillSelect(dsSchemaEl, schemas, '-- Select schema --');
+              show('Discovery completed successfully.');
+            })
+            .catch(function (e) { show(e.message || 'Discovery failed', true); });
+        }
 
         function cardHtml(d) {
+          var c = d.credentials || {};
+          var loc = [];
+          if (c.host) loc.push('Host: ' + c.host);
+          if (c.database) loc.push('Database: ' + c.database);
+          if (c.schema) loc.push('Schema: ' + c.schema);
           return '<div class="card">' +
             '<div style="font-weight:700;">' + d.name + '</div>' +
             '<div class="small">' + d.connection_type + '</div>' +
             '<div class="status">Configured</div>' +
             '<div class="small">Owner role: ' + (d.owner_role || 'all') + '</div>' +
             '<div class="small">Created by: ' + (d.created_by || '') + '</div>' +
-            '<div style="margin-top:10px;display:flex;gap:8px;">' +
+            (loc.length ? '<div class="small">' + loc.join(' | ') + '</div>' : '') +
+            '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">' +
+              '<button class="btn" data-edit="' + d.id + '" style="padding:8px 10px;background:#4f46e5;">Edit</button>' +
               '<button class="btn" data-test="' + d.id + '" style="padding:8px 10px;">Test Connection</button>' +
               '<button class="btn" data-del="' + d.id + '" style="padding:8px 10px;background:#b91c1c;">Delete</button>' +
             '</div>' +
           '</div>';
         }
 
+        function bindCardActions() {
+          cardsEl.querySelectorAll('button[data-edit]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var id = btn.getAttribute('data-edit');
+              var ds = datasourceById[id];
+              if (!ds) return;
+              enterEditMode(ds);
+            });
+          });
+
+          cardsEl.querySelectorAll('button[data-del]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var id = btn.getAttribute('data-del');
+              requestJson('/api/datasources/' + id, { method: 'DELETE' })
+                .then(function () {
+                  show('Datasource deleted.');
+                  load();
+                })
+                .catch(function (e) { show(e.message || 'Delete failed', true); });
+            });
+          });
+
+          cardsEl.querySelectorAll('button[data-test]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var id = btn.getAttribute('data-test');
+              requestJson('/api/datasources/' + id + '/schemas')
+                .then(function () { show('Connection test completed successfully.'); })
+                .catch(function (e) { show(e.message || 'Connection test failed', true); });
+            });
+          });
+        }
+
         function load() {
-          fetch('/api/datasources')
-            .then(function (r) { return r.json(); })
+          requestJson('/api/datasources')
             .then(function (data) {
               var rows = data.datasources || [];
+              datasourceById = {};
+              rows.forEach(function (d) { datasourceById[d.id] = d; });
               cardsEl.innerHTML = rows.map(cardHtml).join('');
-              cardsEl.querySelectorAll('button[data-del]').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                  fetch('/api/datasources/' + btn.getAttribute('data-del'), { method: 'DELETE' })
-                    .then(function (r) {
-                      if (!r.ok) throw new Error('Delete failed');
-                      show('Datasource deleted.');
-                      load();
-                    })
-                    .catch(function (e) { show(e.message || 'Delete failed', true); });
-                });
-              });
-              cardsEl.querySelectorAll('button[data-test]').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                  var id = btn.getAttribute('data-test');
-                  fetch('/api/datasources/' + id + '/schemas')
-                    .then(function (r) { return r.json(); })
-                    .then(function () { show('Connection test completed successfully.'); })
-                    .catch(function (e) { show(e.message || 'Connection test failed', true); });
-                });
-              });
+              bindCardActions();
             })
             .catch(function (e) { show(e.message || 'Failed to load datasources', true); });
         }
 
-        document.getElementById('open_create').addEventListener('click', function () { modal.classList.add('show'); });
+        document.getElementById('open_create').addEventListener('click', enterCreateMode);
         document.getElementById('cancel_modal').addEventListener('click', function () { modal.classList.remove('show'); });
         modal.addEventListener('click', function (evt) {
           if (evt.target === modal) modal.classList.remove('show');
         });
+        dsTypeEl.addEventListener('change', renderCredentialFields);
+        dsDatabaseEl.addEventListener('change', function () { discover('schemas'); });
+        document.getElementById('discover_databases').addEventListener('click', function () { discover('databases'); });
+        document.getElementById('discover_schemas').addEventListener('click', function () { discover('schemas'); });
 
-        document.getElementById('create_ds_btn').addEventListener('click', function () {
-          var name = document.getElementById('ds_name').value.trim();
-          var connection_type = document.getElementById('ds_type').value;
-          var owner_role = document.getElementById('ds_owner_role').value;
-          var credentialsText = document.getElementById('ds_credentials').value.trim();
-          if (!name || !credentialsText) { show('Enter name and credentials JSON.', true); return; }
-          var credentials;
-          try { credentials = JSON.parse(credentialsText); } catch (e) { show('Invalid credentials JSON.', true); return; }
-          fetch('/api/datasources', {
-            method: 'POST',
+        submitBtn.addEventListener('click', function () {
+          var name = dsNameEl.value.trim();
+          var connection_type = dsTypeEl.value;
+          var owner_role = dsOwnerRoleEl.value;
+          var credentials = collectCredentials();
+          var isEdit = Boolean(editingDatasourceId);
+          if (!name) { show('Enter datasource name.', true); return; }
+          var missing = validateCredentials(connection_type, credentials, isEdit);
+          if (missing.length) { show('Missing required fields: ' + missing.join(', '), true); return; }
+
+          var endpoint = isEdit ? ('/api/datasources/' + editingDatasourceId) : '/api/datasources';
+          var method = isEdit ? 'PUT' : 'POST';
+          requestJson(endpoint, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name, connection_type: connection_type, owner_role: owner_role, credentials: credentials })
-          })
-            .then(function (r) {
-              if (!r.ok) return r.json().then(function (e) { throw new Error((e && e.detail) || 'Create failed'); });
-              return r.json();
+            body: JSON.stringify({
+              name: name,
+              connection_type: connection_type,
+              owner_role: owner_role,
+              credentials: credentials
             })
+          })
             .then(function () {
-              show('Data source created successfully.');
+              show(isEdit ? 'Data source updated successfully.' : 'Data source created successfully.');
               modal.classList.remove('show');
-              document.getElementById('ds_name').value = '';
-              document.getElementById('ds_credentials').value = '';
+              resetModalForCreate();
               load();
             })
-            .catch(function (e) { show(e.message || 'Create failed', true); });
+            .catch(function (e) { show(e.message || (isEdit ? 'Update failed' : 'Create failed'), true); });
         });
 
+        resetModalForCreate();
+        modal.classList.remove('show');
         load();
       })();
     </script>

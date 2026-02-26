@@ -29,7 +29,7 @@ class MssqlConnector:
         driver = self._resolve_driver()
         host = str(self._credentials["host"]).strip()
         port = self._credentials.get("port", 1433)
-        database = self._credentials["database"]
+        database = self._credentials.get("database") or "master"
         auth_type = (self._credentials.get("auth_type") or "sql").lower()
 
         # Support both host,port and named instance formats:

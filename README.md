@@ -33,7 +33,7 @@ The UI now includes a Figma-style multi-page shell:
 - Settings page
 - Audit Logs page
 - Header + left sidebar navigation across pages
-- Source/Target datasource dropdowns with dynamic schema/table loading
+- Source/Target datasource, database, schema, and table dropdowns with dynamic loading
 - Mapping generation with browser download
 
 ## Why it matters for ETL teams
@@ -49,9 +49,12 @@ The UI now includes a Figma-style multi-page shell:
 - Type and name-based match logic
 - Excel export (`.xlsx`) with source/target table names in filename
 - Connection testing endpoints for all supported connectors
-- Datasource APIs (create/list/delete)
-- Datasource schema/table discovery APIs
+- Parameter-based datasource creation UI (no raw JSON input required)
+- Datasource APIs (create/list/delete + discover databases/schemas)
+- Datasource database/schema/table discovery APIs
 - Role-based login and admin/user access controls
+- Live dashboard metrics powered by mapping run history
+- Live mapping history records captured on successful runs
 - Detailed stage-based error messages and hints
 - Application logs with masked credentials
 - Build/version endpoint (`/health/version`)
@@ -65,7 +68,6 @@ The UI now includes a Figma-style multi-page shell:
 - Mapping quality checks (coverage, drift, compatibility)
 - Versioned mapping history and approvals
 - One-time connection profile setup with RBAC-based reuse
-- Schema/table discovery dropdowns from registered connections
 - Multi-table selection and batch mapping export
 
 ## Tech Stack
@@ -202,8 +204,12 @@ Implementation direction:
 - `GET /api/datasources`
 - `POST /api/datasources`
 - `DELETE /api/datasources/{datasource_id}`
+- `POST /api/datasources/discover`
+- `GET /api/datasources/{datasource_id}/databases`
 - `GET /api/datasources/{datasource_id}/schemas`
 - `GET /api/datasources/{datasource_id}/tables`
+- `GET /api/dashboard/metrics`
+- `GET /api/mapping-runs`
 - `GET /api/admin/users`
 - `POST /api/admin/users`
 - `POST /generate-mapping`
@@ -213,7 +219,7 @@ Implementation direction:
 
 ## Datasources and RBAC (current release)
 
-You can now create reusable datasources and discover source/target schemas/tables from those datasources.
+You can now create reusable datasources from typed fields in the UI and discover source/target databases, schemas, and tables from those datasources.
 
 Example create datasource:
 
@@ -237,8 +243,26 @@ POST /api/datasources
 
 Discover schemas/tables:
 
+- `GET /api/datasources/{datasource_id}/databases`
 - `GET /api/datasources/{datasource_id}/schemas`
 - `GET /api/datasources/{datasource_id}/tables?schema=dbo`
+
+Discover options before saving datasource (admin):
+
+```json
+POST /api/datasources/discover
+{
+  "connection_type": "mssql",
+  "credentials": {
+    "host": "localhost\\SQLEXPRESS",
+    "port": 1433,
+    "user": "Admin_test",
+    "password": "your-password",
+    "auth_type": "sql"
+  },
+  "database": "SQLlearning"
+}
+```
 
 ## Security
 

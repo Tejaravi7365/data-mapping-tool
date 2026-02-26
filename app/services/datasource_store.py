@@ -65,3 +65,29 @@ class DatasourceStore:
         self._save(filtered)
         return True
 
+    def update(
+        self,
+        datasource_id: str,
+        name: str,
+        connection_type: str,
+        credentials: Dict[str, Any],
+        owner_role: str = "all",
+    ) -> Optional[Dict[str, Any]]:
+        rows = self._load()
+        updated_item: Optional[Dict[str, Any]] = None
+        now = datetime.utcnow().isoformat() + "Z"
+        for row in rows:
+            if row.get("id") != datasource_id:
+                continue
+            row["name"] = name
+            row["connection_type"] = connection_type
+            row["credentials"] = credentials
+            row["owner_role"] = owner_role
+            row["updated_at"] = now
+            updated_item = row
+            break
+        if not updated_item:
+            return None
+        self._save(rows)
+        return updated_item
+

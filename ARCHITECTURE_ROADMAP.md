@@ -10,6 +10,10 @@ Evolve the tool from local, single-user execution into a secure, shared, enterpr
 - Local/VM runtime with UI + API
 - Multi-source/target mapping (Salesforce, MSSQL, MySQL, Redshift)
 - Connector test endpoints
+- Parameter-based datasource creation flow in admin UI
+- Dynamic datasource discovery (databases, schemas, tables)
+- Schema-aware mapping workspace selectors (source and target)
+- Live dashboard and mapping history driven by persisted mapping run data
 - Excel export + Desktop copy
 - Basic logging with masked passwords/tokens
 
@@ -79,21 +83,21 @@ Move from per-run credential entry to reusable, governed connection profiles.
 
 ---
 
-## Phase 3: Metadata Discovery + Dropdown UX
+## Phase 3: Metadata Discovery + Dropdown UX (Delivered)
 
 ### Goal
 
-Let users select schemas/tables from discovered metadata instead of typing names manually.
+Let users select databases/schemas/tables from discovered metadata instead of typing names manually.
 
 ### Scope
 
-- Endpoints to list schemas/tables/columns by selected profile
-- UI dropdowns for source/target object/table selection
+- Endpoints to list databases/schemas/tables by selected datasource
+- UI dropdowns for source/target datasource, database, schema, and object/table selection
 - Caching strategy for metadata browsing performance
 
 ### Deliverables
 
-- Discovery APIs (`/profiles/{id}/schemas`, `/tables`, `/columns`)
+- Discovery APIs (`/api/datasources/{id}/databases`, `/schemas`, `/tables`)
 - Dynamic UI selectors with search/filter
 - Error handling for permissions/metadata access failures
 

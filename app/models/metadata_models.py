@@ -81,6 +81,8 @@ class GenerateMappingRequest(BaseModel):
     target_datasource_id: Optional[str] = None
     source_database: Optional[str] = None
     target_database: Optional[str] = None
+    source_schema: Optional[str] = None
+    target_schema: Optional[str] = None
     source_object: str = Field(..., description="Source object or table name")
     target_table: str = Field(..., description="Target table name")
     preview: bool = Field(

@@ -69,8 +69,8 @@ This avoids conflicts with old app instances and reduces accidental network expo
    - `Database Connections` (admin page)
    - `Settings`
    - `Audit Logs`
-4. In `Mapping Workspace`, select source datasource + schema + table.
-5. Select target datasource + schema + table.
+4. In `Mapping Workspace`, select source datasource + database + schema + table.
+5. Select target datasource + database + schema + table.
 6. Click `Generate Mapping`.
 
 On success:
@@ -119,8 +119,15 @@ You can manage reusable datasources via API docs (`/docs`):
 - `GET /api/datasources`
 - `POST /api/datasources`
 - `DELETE /api/datasources/{datasource_id}`
+- `POST /api/datasources/discover`
+- `GET /api/datasources/{datasource_id}/databases`
 - `GET /api/datasources/{datasource_id}/schemas`
 - `GET /api/datasources/{datasource_id}/tables`
+
+You can view live operational data via:
+
+- `GET /api/dashboard/metrics`
+- `GET /api/mapping-runs`
 
 ## Optional: access from other devices
 
