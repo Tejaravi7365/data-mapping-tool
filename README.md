@@ -289,3 +289,7 @@ For a stakeholder-friendly security explanation, see:
 
 - `SECURITY_CONSIDERATIONS.md`
 
+For deployment/governance review meetings, use:
+
+- `docs/review-pack/00_REVIEW_PACK_INDEX.md`
+
