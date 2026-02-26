@@ -491,7 +491,15 @@ async def login_submit(request: Request):
             status_code=401,
         )
     response = RedirectResponse(url="/dashboard", status_code=302)
-    response.set_cookie("session_token", token, httponly=True, samesite="lax")
+    response.set_cookie(
+        "session_token",
+        token,
+        httponly=True,
+        samesite="lax",
+        secure=(request.url.scheme == "https"),
+        max_age=USER_STORE.session_ttl_seconds,
+        path="/",
+    )
     return response
 
 
@@ -625,18 +633,20 @@ def security_notes():
 
 
 @app.get("/api/profiles")
-def list_profiles():
+def list_profiles(request: Request):
+    _require_admin_user(request)
     return {"profiles": [_datasource_response(p) for p in DATASOURCE_STORE.list()]}
 
 
 @app.post("/api/profiles")
-def create_profile(payload: ConnectionProfileCreate):
+def create_profile(payload: ConnectionProfileCreate, request: Request):
+    admin = _require_admin_user(request)
     created = DATASOURCE_STORE.create(
         name=payload.name,
         connection_type=payload.connection_type.value,
         credentials=payload.credentials,
         owner_role=payload.owner or "all",
-        created_by="admin",
+        created_by=admin.get("username", "admin"),
     )
     logger.info(
         "Connection profile created | id=%s | type=%s | owner=%s",
@@ -648,7 +658,8 @@ def create_profile(payload: ConnectionProfileCreate):
 
 
 @app.delete("/api/profiles/{profile_id}")
-def delete_profile(profile_id: str):
+def delete_profile(profile_id: str, request: Request):
+    _require_admin_user(request)
     deleted = DATASOURCE_STORE.delete(profile_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Profile '{profile_id}' not found")
@@ -656,7 +667,8 @@ def delete_profile(profile_id: str):
 
 
 @app.get("/api/profiles/{profile_id}/objects")
-def profile_objects(profile_id: str):
+def profile_objects(profile_id: str, request: Request):
+    _require_admin_user(request)
     profile = DATASOURCE_STORE.get(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail=f"Profile '{profile_id}' not found")

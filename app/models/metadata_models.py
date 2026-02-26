@@ -26,7 +26,7 @@ class SalesforceCredentials(BaseModel):
 class RedshiftCredentials(BaseModel):
     host: str
     port: int = 5439
-    database: str
+    database: Optional[str] = None
     user: str
     password: str
     schema: str = "public"
@@ -40,7 +40,7 @@ class MssqlAuthType(str, Enum):
 class MssqlCredentials(BaseModel):
     host: str
     port: int = 1433
-    database: str
+    database: Optional[str] = None
     user: Optional[str] = None
     password: Optional[str] = None
     schema: str = "dbo"
@@ -62,7 +62,7 @@ class MssqlCredentials(BaseModel):
 class MysqlCredentials(BaseModel):
     host: str
     port: int = 3306
-    database: str
+    database: Optional[str] = None
     user: str
     password: str
     schema: Optional[str] = None  # defaults to database

@@ -104,10 +104,14 @@ Current implementation note:
 
 Current behavior:
 - Session cookie based login (`/login`) with prototype roles (`admin`, `user`).
-- Admin-gated management APIs/pages for datasource and user operations.
+- Session cookies are HTTP-only, TTL-bound, and marked `secure` under HTTPS.
+- Server-side sessions enforce expiration.
+- Password storage uses salted PBKDF2-HMAC-SHA256 hashes.
+- Legacy SHA-256 hashes are auto-migrated to PBKDF2 on successful login.
+- Admin-gated management APIs/pages cover datasource, user, and legacy profile operations.
 
 Recommended controls:
-- Use signed/rotated session secrets and explicit session expiration.
+- Use signed/rotated session secrets with persistent backing store (for multi-instance hosting).
 - Integrate enterprise identity (SSO/OIDC) instead of local user file.
 - Add audit event persistence for admin actions.
 

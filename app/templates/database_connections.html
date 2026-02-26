@@ -300,7 +300,7 @@
           var required = {
             mssql: ['host'],
             mysql: ['host', 'user'],
-            redshift: ['host', 'database', 'user'],
+            redshift: ['host', 'user'],
             salesforce: ['username']
           };
           var missing = (required[type] || []).filter(function (k) { return !creds[k] && !isEdit; });

@@ -221,6 +221,11 @@ Implementation direction:
 
 You can now create reusable datasources from typed fields in the UI and discover source/target databases, schemas, and tables from those datasources.
 
+Notes:
+
+- `database` is optional when creating or testing datasources for `mssql`, `mysql`, and `redshift`.
+- This supports server-level onboarding first, then selecting default database/schema after discovery.
+
 Example create datasource:
 
 ```json
@@ -232,7 +237,6 @@ POST /api/datasources
   "credentials": {
     "host": "localhost\\SQLEXPRESS",
     "port": 1433,
-    "database": "SQLlearning",
     "user": "Admin_test",
     "password": "your-password",
     "schema": "dbo",
@@ -259,10 +263,17 @@ POST /api/datasources/discover
     "user": "Admin_test",
     "password": "your-password",
     "auth_type": "sql"
-  },
-  "database": "SQLlearning"
+  }
 }
 ```
+
+## Security and Access Controls (current build)
+
+- Session authentication uses HTTP-only cookies with explicit session TTL.
+- Passwords are stored using salted PBKDF2-HMAC-SHA256 hashes.
+- Legacy unsalted SHA-256 password hashes are upgraded on successful login.
+- Legacy `/api/profiles*` endpoints are now admin-protected.
+- Datasource credentials are still JSON-backed for prototype use; migrate to a secrets manager before production.
 
 ## Security
 

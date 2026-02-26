@@ -124,6 +124,11 @@ You can manage reusable datasources via API docs (`/docs`):
 - `GET /api/datasources/{datasource_id}/schemas`
 - `GET /api/datasources/{datasource_id}/tables`
 
+Datasource credential note:
+
+- For `mssql`, `mysql`, and `redshift`, `credentials.database` is optional during create/test.
+- This allows server-level discovery first (`/api/datasources/discover`, `/databases`, `/schemas`) and default database/schema selection later.
+
 You can view live operational data via:
 
 - `GET /api/dashboard/metrics`

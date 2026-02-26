@@ -4,6 +4,8 @@
 
 ### Highlights
 
+- Improved datasource onboarding by allowing server-level connection setup without mandatory `database`.
+- Added security hardening for authentication/session and legacy profile API access.
 - Replaced raw credentials JSON entry in `Database Connections` with parameter-based input fields.
 - Added server-first datasource discovery in the create flow:
   - Load available databases
@@ -15,6 +17,17 @@
 
 ### Backend/API Updates
 
+- Credential model update:
+  - `database` is now optional for `mssql`, `mysql`, and `redshift` credential payloads.
+- Legacy profile APIs now require admin session:
+  - `GET /api/profiles`
+  - `POST /api/profiles`
+  - `DELETE /api/profiles/{profile_id}`
+  - `GET /api/profiles/{profile_id}/objects`
+- Authentication/session hardening:
+  - Password hashes upgraded to salted PBKDF2-HMAC-SHA256.
+  - Legacy SHA-256 hashes auto-upgrade on successful login.
+  - Session TTL enforcement with cookie `max_age`; `secure` cookie flag applied under HTTPS.
 - Added mapping run persistence:
   - `app/services/mapping_run_store.py`
   - `app/data/mapping_runs.json`

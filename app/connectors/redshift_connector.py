@@ -14,10 +14,11 @@ class RedshiftConnector:
         self._credentials = credentials
 
     def _get_connection(self):
+        database = self._credentials.get("database") or "dev"
         return psycopg2.connect(
             host=self._credentials["host"],
             port=self._credentials.get("port", 5439),
-            dbname=self._credentials["database"],
+            dbname=database,
             user=self._credentials["user"],
             password=self._credentials["password"],
         )
