@@ -22,18 +22,17 @@ Supported platforms:
 
 
 
-The UI now includes:
+The UI now includes a Figma-style multi-page shell:
 
-- A home/overview landing section
-- A presentation mode for leadership demos
-- A "Launch Mapping Studio" entry point
-- Source/Target database dropdowns
-- Dynamic connection parameter tabs (Source, Target, Both)
-- Per-connector test-connection actions
-- Password/Security token show-hide toggles for verification
-- Mapping generation with success message and download
-- Automatic desktop copy on successful UI generation
-- Workspace `Home` button to return to landing page
+- Dashboard overview page with KPI cards
+- Mapping Workspace page for source/target selection and generation
+- Mapping History page
+- Database Connections admin page (datasource management)
+- Settings page
+- Audit Logs page
+- Header + left sidebar navigation across pages
+- Source/Target datasource dropdowns with dynamic schema/table loading
+- Mapping generation with browser download
 
 ## Why it matters for ETL teams
 
@@ -48,6 +47,9 @@ The UI now includes:
 - Type and name-based match logic
 - Excel export (`.xlsx`) with source/target table names in filename
 - Connection testing endpoints for all supported connectors
+- Datasource APIs (create/list/delete)
+- Datasource schema/table discovery APIs
+- Role-based login and admin/user access controls
 - Detailed stage-based error messages and hints
 - Application logs with masked credentials
 - Build/version endpoint (`/health/version`)
@@ -60,6 +62,9 @@ The UI now includes:
 - Cross-system lineage hints
 - Mapping quality checks (coverage, drift, compatibility)
 - Versioned mapping history and approvals
+- One-time connection profile setup with RBAC-based reuse
+- Schema/table discovery dropdowns from registered connections
+- Multi-table selection and batch mapping export
 
 ## Tech Stack
 
@@ -82,9 +87,14 @@ Open:
 - API docs: `http://127.0.0.1:8101/docs`
 - Version health: `http://127.0.0.1:8101/health/version`
 
+Login defaults (prototype):
+
+- `admin / admin123`
+- `user / user123`
+
 Demo tip:
 
-- Click `Presentation Mode` on the landing page to show an executive summary with KPI-style cards.
+- Open `http://127.0.0.1:8101/dashboard` after login to see the new dashboard-first flow.
 
 ## Run On Another System
 
@@ -139,16 +149,94 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8101 --app-dir /
 - Port already in use:
   - run with another port (example `--port 8102`)
 
+## Feasibility: Team Feedback
+
+### 1) Hosted URL access on EC2/VM (instead of local-only)
+
+Yes, this is feasible and a common next step.
+
+Recommended pattern:
+
+- Deploy FastAPI app on EC2/VM
+- Run with process manager (`systemd`/`supervisor`) and `uvicorn`/`gunicorn`
+- Put Nginx/ALB in front for HTTPS and routing
+- Provide single URL for users (bookmark + one-click access)
+
+### 2) One-time DB connection setup + user-based usage flow
+
+Yes, feasible with moderate backend enhancement.
+
+Target design:
+
+- Admin registers connection profiles once (per env/source/target)
+- Credentials stored in secret manager (not in plain DB)
+- Users get role-based access to approved connection profiles
+- Users select source/target profile and choose objects/tables from dropdown lists
+- Optional multi-table selection for batch mapping generation
+
+### 3) Metadata-driven dropdowns and multi-table mapping
+
+Yes, feasible and aligns with current architecture.
+
+Implementation direction:
+
+- Add endpoints for listing schemas/tables/columns by selected profile
+- Populate UI dropdowns dynamically
+- Support selecting multiple source/target tables
+- Generate one consolidated workbook (tabs per table pair) or zipped outputs
+
 ## Key Endpoints
 
 - `POST /api/test-connection/salesforce`
 - `POST /api/test-connection/redshift`
 - `POST /api/test-connection/mssql`
 - `POST /api/test-connection/mysql`
+- `GET /dashboard`
+- `GET /mapping`
+- `GET /mapping-history`
+- `GET /datasources`
+- `GET /settings`
+- `GET /audit-logs`
+- `GET /api/datasources`
+- `POST /api/datasources`
+- `DELETE /api/datasources/{datasource_id}`
+- `GET /api/datasources/{datasource_id}/schemas`
+- `GET /api/datasources/{datasource_id}/tables`
+- `GET /api/admin/users`
+- `POST /api/admin/users`
 - `POST /generate-mapping`
 - `POST /ui/generate-mapping`
 - `GET /health/version`
 - `GET /security/notes`
+
+## Datasources and RBAC (current release)
+
+You can now create reusable datasources and discover source/target schemas/tables from those datasources.
+
+Example create datasource:
+
+```json
+POST /api/datasources
+{
+  "name": "local-sqllearning",
+  "connection_type": "mssql",
+  "owner_role": "all",
+  "credentials": {
+    "host": "localhost\\SQLEXPRESS",
+    "port": 1433,
+    "database": "SQLlearning",
+    "user": "Admin_test",
+    "password": "your-password",
+    "schema": "dbo",
+    "auth_type": "sql"
+  }
+}
+```
+
+Discover schemas/tables:
+
+- `GET /api/datasources/{datasource_id}/schemas`
+- `GET /api/datasources/{datasource_id}/tables?schema=dbo`
 
 ## Security
 

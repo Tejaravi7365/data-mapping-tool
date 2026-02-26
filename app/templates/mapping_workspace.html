@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mapping Workspace</title>
+    <style>
+      body { margin: 0; font-family: Arial, sans-serif; background: #0b1220; color: #e5e7eb; }
+      .top { height: 52px; background: #1e3a8a; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
+      .brand { font-weight: 700; }
+      .shell { display: grid; grid-template-columns: 230px 1fr; min-height: calc(100vh - 52px); }
+      .nav { background: #0f172a; border-right: 1px solid #1f2937; padding: 14px 10px; }
+      .nav a { display: block; color: #cbd5e1; text-decoration: none; padding: 10px 12px; border-radius: 8px; font-size: 0.9rem; }
+      .nav a.active, .nav a:hover { background: #1e3a8a; color: #fff; }
+      .main { padding: 18px; }
+      .title { font-size: 1.3rem; font-weight: 700; margin-bottom: 4px; }
+      .subtitle { color: #94a3b8; font-size: 0.9rem; margin-bottom: 14px; }
+      .card { background: #0f172a; border: 1px solid #1f2937; border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+      .card h4 { margin: 0 0 10px 0; }
+      .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+      label { display: block; font-size: 0.8rem; color: #cbd5e1; margin-bottom: 4px; }
+      input, select, textarea { width: 100%; box-sizing: border-box; background: #111827; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; padding: 8px; }
+      textarea { min-height: 84px; }
+      .actions { display: flex; justify-content: center; margin-top: 12px; }
+      .btn { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; cursor: pointer; }
+      .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+      .status { margin-top: 10px; text-align: center; font-size: 0.88rem; color: #93c5fd; }
+      .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .checks label { margin: 0; display: flex; gap: 8px; align-items: center; font-size: 0.85rem; }
+      .small { color: #94a3b8; font-size: 0.8rem; }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div class="brand">Data Mapping Studio</div>
+      <div>{{ username }} ({{ user_role }}) | <a href="/logout" style="color:#dbeafe;">Logout</a></div>
+    </div>
+    <div class="shell">
+      <div class="nav">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/mapping" class="active">Mapping Workspace</a>
+        <a href="/mapping-history">Mapping History</a>
+        <a href="/datasources">Database Connections</a>
+        <a href="/settings">Settings</a>
+        <a href="/audit-logs">Audit Logs</a>
+      </div>
+      <div class="main">
+        <div class="title">Mapping Workspace</div>
+        <div class="subtitle">Configure source and target datasources, databases, and tables</div>
+
+        <div class="card">
+          <h4>Source Configuration</h4>
+          <div class="row">
+            <div>
+              <label>Data Source</label>
+              <select id="source_ds"></select>
+            </div>
+            <div>
+              <label>Database</label>
+              <select id="source_database"></select>
+            </div>
+            <div>
+              <label>Table / Object</label>
+              <input id="source_table" list="source_table_list" placeholder="Select or type table/object" />
+              <datalist id="source_table_list"></datalist>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h4>Target Configuration</h4>
+          <div class="row">
+            <div>
+              <label>Data Source</label>
+              <select id="target_ds"></select>
+            </div>
+            <div>
+              <label>Database</label>
+              <select id="target_database"></select>
+            </div>
+            <div>
+              <label>Table</label>
+              <input id="target_table" list="target_table_list" placeholder="Select or type table" />
+              <datalist id="target_table_list"></datalist>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h4>Matching Configuration</h4>
+          <div class="checks">
+            <label><input type="checkbox" id="enable_fuzzy" checked /> Enable fuzzy matching</label>
+            <label><input type="checkbox" id="compare_types" checked /> Compare data types</label>
+            <label><input type="checkbox" id="case_insensitive" checked /> Case-insensitive matching</label>
+            <label><input type="checkbox" id="ignore_prefix_suffix" checked /> Ignore prefix/suffix patterns</label>
+          </div>
+          <div class="small" style="margin-top:8px;">Note: matching options are UI-level controls for now; core engine settings rollout is next.</div>
+        </div>
+
+        <div class="card">
+          <h4>Mapping Strategy Mode</h4>
+          <div class="checks">
+            <label><input type="radio" name="mode" checked /> One-to-One Table Mapping</label>
+            <label><input type="radio" name="mode" /> Bulk Multi-table Auto Mapping (next)</label>
+          </div>
+          <div class="actions">
+            <button class="btn" id="generate_btn" type="button">Generate Mapping</button>
+          </div>
+          <div class="status" id="status"></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var sourceDs = document.getElementById('source_ds');
+        var targetDs = document.getElementById('target_ds');
+        var sourceDatabase = document.getElementById('source_database');
+        var targetDatabase = document.getElementById('target_database');
+        var sourceTable = document.getElementById('source_table');
+        var targetTable = document.getElementById('target_table');
+        var sourceList = document.getElementById('source_table_list');
+        var targetList = document.getElementById('target_table_list');
+        var statusEl = document.getElementById('status');
+        var generateBtn = document.getElementById('generate_btn');
+        var datasourceMap = {};
+
+        function setStatus(msg, isErr) {
+          statusEl.textContent = msg || '';
+          statusEl.style.color = isErr ? '#fca5a5' : '#93c5fd';
+        }
+
+        function optionHtml(value, label, selected) {
+          return '<option value="' + value + '"' + (selected ? ' selected' : '') + '>' + label + '</option>';
+        }
+
+        function fillSelect(selectEl, rows, placeholder) {
+          var html = [optionHtml('', placeholder, true)];
+          rows.forEach(function (r) {
+            html.push(optionHtml(r.id, r.name + ' (' + r.connection_type + ')', false));
+          });
+          selectEl.innerHTML = html.join('');
+        }
+
+        function fillDatabaseSelect(selectEl, databases) {
+          var html = [optionHtml('', '-- Select database --', true)];
+          (databases || []).forEach(function (d) { html.push(optionHtml(d, d, false)); });
+          selectEl.innerHTML = html.join('');
+        }
+
+        function fillTableList(listEl, rows) {
+          listEl.innerHTML = '';
+          (rows || []).forEach(function (t) {
+            var o = document.createElement('option');
+            o.value = t;
+            listEl.appendChild(o);
+          });
+        }
+
+        function loadDatabases(dsId, databaseSelectEl) {
+          if (!dsId) {
+            fillDatabaseSelect(databaseSelectEl, []);
+            return Promise.resolve();
+          }
+          return fetch('/api/datasources/' + dsId + '/databases')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+              var values = d.databases || [];
+              fillDatabaseSelect(databaseSelectEl, values);
+              if (values.length === 1) {
+                databaseSelectEl.value = values[0];
+              }
+            });
+        }
+
+        function loadTables(dsId, database, listEl) {
+          if (!dsId) {
+            fillTableList(listEl, []);
+            return Promise.resolve();
+          }
+          var url = '/api/datasources/' + dsId + '/tables';
+          if (database) url += '?database=' + encodeURIComponent(database);
+          return fetch(url)
+            .then(function (r) { return r.json(); })
+            .then(function (d) { fillTableList(listEl, d.tables || []); });
+        }
+
+        function selectedType(selectEl) {
+          var id = selectEl.value;
+          return id && datasourceMap[id] ? datasourceMap[id].connection_type : '';
+        }
+
+        function loadDatasources() {
+          fetch('/api/datasources')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+              var rows = d.datasources || [];
+              datasourceMap = {};
+              rows.forEach(function (x) { datasourceMap[x.id] = x; });
+              fillSelect(sourceDs, rows, '-- Select source datasource --');
+              fillSelect(targetDs, rows, '-- Select target datasource --');
+            })
+            .catch(function (e) { setStatus(e.message || 'Failed to load datasources', true); });
+        }
+
+        sourceDs.addEventListener('change', function () {
+          sourceTable.value = '';
+          loadDatabases(sourceDs.value, sourceDatabase).then(function () {
+            return loadTables(sourceDs.value, sourceDatabase.value, sourceList);
+          });
+        });
+        targetDs.addEventListener('change', function () {
+          targetTable.value = '';
+          loadDatabases(targetDs.value, targetDatabase).then(function () {
+            return loadTables(targetDs.value, targetDatabase.value, targetList);
+          });
+        });
+        sourceDatabase.addEventListener('change', function () {
+          loadTables(sourceDs.value, sourceDatabase.value, sourceList);
+        });
+        targetDatabase.addEventListener('change', function () {
+          loadTables(targetDs.value, targetDatabase.value, targetList);
+        });
+
+        generateBtn.addEventListener('click', function () {
+          setStatus('');
+          if (!sourceDs.value || !targetDs.value || !sourceTable.value.trim() || !targetTable.value.trim()) {
+            setStatus('Select source/target datasources and tables first.', true);
+            return;
+          }
+          var payload = {
+            source_type: selectedType(sourceDs),
+            target_type: selectedType(targetDs),
+            source_datasource_id: sourceDs.value,
+            target_datasource_id: targetDs.value,
+            source_database: sourceDatabase.value || null,
+            target_database: targetDatabase.value || null,
+            source_object: sourceTable.value.trim(),
+            target_table: targetTable.value.trim(),
+            preview: false
+          };
+          generateBtn.disabled = true;
+          setStatus('Generating mapping...');
+          fetch('/generate-mapping', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+            .then(function (response) {
+              if (!response.ok) {
+                return response.json().then(function (err) {
+                  throw new Error((err && err.detail) || 'Generate failed');
+                });
+              }
+              var disposition = response.headers.get('content-disposition') || '';
+              var m = /filename=\"?([^\";]+)\"?/i.exec(disposition);
+              var filename = m && m[1] ? m[1] : 'mapping.xlsx';
+              return response.blob().then(function (blob) {
+                var u = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = u;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(u);
+                setStatus('Mapping generated successfully.');
+              });
+            })
+            .catch(function (e) { setStatus(e.message || 'Generate failed', true); })
+            .finally(function () { generateBtn.disabled = false; });
+        });
+
+        loadDatasources();
+      })();
+    </script>
+  </body>
+</html>

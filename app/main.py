@@ -3,8 +3,8 @@ from pathlib import Path
 import re
 from typing import Any, Dict
 
-from fastapi import FastAPI, HTTPException, Request, Form
-from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from io import BytesIO
 
@@ -17,6 +17,7 @@ from .models.metadata_models import (
     SalesforceCredentials,
     RedshiftCredentials,
     MysqlCredentials,
+    ConnectionProfileCreate,
 )
 from .services.metadata_service import MetadataService
 from .services.mapping_engine import MappingEngine
@@ -26,12 +27,16 @@ from .connectors.salesforce_connector import SalesforceConnector
 from .connectors.redshift_connector import RedshiftConnector
 from .connectors.mysql_connector import MysqlConnector
 from .logging_utils import setup_logger
+from .services.datasource_store import DatasourceStore
+from .services.user_store import UserStore
 
 
 app = FastAPI(title="Data Mapping Sheet Generator (Multi-Source → Multi-Target)")
 templates = Jinja2Templates(directory="app/templates")
 logger = setup_logger()
 APP_BUILD = "multi-source-v2"
+DATASOURCE_STORE = DatasourceStore()
+USER_STORE = UserStore()
 
 
 def _sanitize_credentials(credentials: Dict[str, Any]) -> Dict[str, Any]:
@@ -40,6 +45,42 @@ def _sanitize_credentials(credentials: Dict[str, Any]) -> Dict[str, Any]:
         if key in redacted and redacted[key]:
             redacted[key] = "***"
     return redacted
+
+
+def _datasource_response(profile: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": profile.get("id"),
+        "name": profile.get("name"),
+        "connection_type": profile.get("connection_type"),
+        "owner_role": profile.get("owner_role", "all"),
+        "created_by": profile.get("created_by", "admin"),
+        "created_at": profile.get("created_at"),
+        "updated_at": profile.get("updated_at"),
+        "credentials": _sanitize_credentials(profile.get("credentials", {})),
+    }
+
+
+def _session_user(request: Request):
+    return USER_STORE.get_session_user(request.cookies.get("session_token"))
+
+
+def _require_session_user(request: Request):
+    user = _session_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+
+def _require_admin_user(request: Request):
+    user = _require_session_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    return user
+
+
+def _datasources_for_user(user: Dict[str, Any]):
+    role = user.get("role", "user")
+    return [d for d in DATASOURCE_STORE.list() if d.get("owner_role", "all") in ("all", role)]
 
 
 def _extract_hint(connection_type: str, exc_text: str) -> str:
@@ -182,11 +223,146 @@ def ui_home(request: Request):
     """
     Simple HTML UI for selecting source/target and entering connection details.
     """
+    if not _session_user(request):
+        return RedirectResponse(url="/login", status_code=302)
+    return RedirectResponse(url="/dashboard", status_code=302)
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
     return templates.TemplateResponse(
-        "index.html",
+        "login.html",
         {
             "request": request,
             "app_build": APP_BUILD,
+            "error": "",
+        },
+    )
+
+
+@app.post("/login", response_class=HTMLResponse)
+async def login_submit(request: Request):
+    form = await request.form()
+    username = str(form.get("username", "")).strip()
+    password = str(form.get("password", ""))
+    token = USER_STORE.authenticate(username, password)
+    if not token:
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "app_build": APP_BUILD,
+                "error": "Invalid username or password",
+            },
+            status_code=401,
+        )
+    response = RedirectResponse(url="/dashboard", status_code=302)
+    response.set_cookie("session_token", token, httponly=True, samesite="lax")
+    return response
+
+
+@app.get("/logout")
+def logout(request: Request):
+    USER_STORE.logout(request.cookies.get("session_token"))
+    response = RedirectResponse(url="/login", status_code=302)
+    response.delete_cookie("session_token")
+    return response
+
+
+@app.get("/mapping", response_class=HTMLResponse)
+def mapping_page(request: Request):
+    user = _session_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        "mapping_workspace.html",
+        {
+            "request": request,
+            "app_build": APP_BUILD,
+            "user_role": user.get("role", "user"),
+            "username": user.get("username", "user"),
+        },
+    )
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_page(request: Request):
+    user = _session_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "app_build": APP_BUILD,
+            "user_role": user.get("role", "user"),
+            "username": user.get("username", "user"),
+        },
+    )
+
+
+@app.get("/mapping-history", response_class=HTMLResponse)
+def mapping_history_page(request: Request):
+    user = _session_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        "mapping_history.html",
+        {
+            "request": request,
+            "app_build": APP_BUILD,
+            "user_role": user.get("role", "user"),
+            "username": user.get("username", "user"),
+        },
+    )
+
+
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request):
+    user = _session_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        "settings.html",
+        {
+            "request": request,
+            "app_build": APP_BUILD,
+            "user_role": user.get("role", "user"),
+            "username": user.get("username", "user"),
+        },
+    )
+
+
+@app.get("/audit-logs", response_class=HTMLResponse)
+def audit_logs_page(request: Request):
+    user = _session_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        "audit_logs.html",
+        {
+            "request": request,
+            "app_build": APP_BUILD,
+            "user_role": user.get("role", "user"),
+            "username": user.get("username", "user"),
+        },
+    )
+
+
+@app.get("/datasources", response_class=HTMLResponse)
+def datasources_page(request: Request):
+    user = _session_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    return templates.TemplateResponse(
+        "database_connections.html",
+        {
+            "request": request,
+            "app_build": APP_BUILD,
+            "user_role": user.get("role", "admin"),
+            "username": user.get("username", "admin"),
         },
     )
 
@@ -214,22 +390,273 @@ def security_notes():
     """
 
 
+@app.get("/api/profiles")
+def list_profiles():
+    return {"profiles": [_datasource_response(p) for p in DATASOURCE_STORE.list()]}
+
+
+@app.post("/api/profiles")
+def create_profile(payload: ConnectionProfileCreate):
+    created = DATASOURCE_STORE.create(
+        name=payload.name,
+        connection_type=payload.connection_type.value,
+        credentials=payload.credentials,
+        owner_role=payload.owner or "all",
+        created_by="admin",
+    )
+    logger.info(
+        "Connection profile created | id=%s | type=%s | owner=%s",
+        created["id"],
+        created["connection_type"],
+        created.get("owner_role", "all"),
+    )
+    return _datasource_response(created)
+
+
+@app.delete("/api/profiles/{profile_id}")
+def delete_profile(profile_id: str):
+    deleted = DATASOURCE_STORE.delete(profile_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Profile '{profile_id}' not found")
+    return {"ok": True}
+
+
+@app.get("/api/profiles/{profile_id}/objects")
+def profile_objects(profile_id: str):
+    profile = DATASOURCE_STORE.get(profile_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail=f"Profile '{profile_id}' not found")
+
+    connection_type = str(profile.get("connection_type", ""))
+    credentials = profile.get("credentials", {})
+    try:
+        if connection_type == "salesforce":
+            items = SalesforceConnector(credentials).list_objects()
+        elif connection_type == "mssql":
+            items = MssqlConnector(credentials).list_tables(credentials.get("schema"))
+        elif connection_type == "mysql":
+            items = MysqlConnector(credentials).list_tables(credentials.get("schema"))
+        elif connection_type == "redshift":
+            schema = credentials.get("schema") or "public"
+            items = RedshiftConnector(credentials).list_tables_for_schema(schema)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported profile type: {connection_type}")
+        return {
+            "profile_id": profile_id,
+            "connection_type": connection_type,
+            "objects": items,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Profile object discovery failed | profile_id=%s", profile_id)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/datasources")
+def list_datasources(request: Request):
+    user = _require_session_user(request)
+    return {"datasources": [_datasource_response(d) for d in _datasources_for_user(user)]}
+
+
+@app.post("/api/datasources")
+async def create_datasource(request: Request):
+    admin = _require_admin_user(request)
+    payload = await request.json()
+    name = str(payload.get("name", "")).strip()
+    connection_type = str(payload.get("connection_type", "")).strip().lower()
+    credentials = payload.get("credentials") or {}
+    owner_role = str(payload.get("owner_role", "all")).strip().lower()
+    if not name or not connection_type or not isinstance(credentials, dict):
+        raise HTTPException(status_code=400, detail="name, connection_type, and credentials are required")
+    created = DATASOURCE_STORE.create(
+        name=name,
+        connection_type=connection_type,
+        credentials=credentials,
+        owner_role=owner_role if owner_role in ("all", "admin", "user") else "all",
+        created_by=admin.get("username", "admin"),
+    )
+    return _datasource_response(created)
+
+
+@app.delete("/api/datasources/{datasource_id}")
+def delete_datasource(datasource_id: str, request: Request):
+    _require_admin_user(request)
+    deleted = DATASOURCE_STORE.delete(datasource_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Datasource '{datasource_id}' not found")
+    return {"ok": True}
+
+
+@app.get("/api/datasources/{datasource_id}/schemas")
+def datasource_schemas(datasource_id: str, request: Request, database: str | None = None):
+    user = _require_session_user(request)
+    ds = next((d for d in _datasources_for_user(user) if d.get("id") == datasource_id), None)
+    if not ds:
+        raise HTTPException(status_code=404, detail=f"Datasource '{datasource_id}' not found")
+    creds = dict(ds.get("credentials", {}))
+    if database:
+        creds["database"] = database
+        if ds.get("connection_type") == "mysql":
+            creds["schema"] = database
+    ctype = ds.get("connection_type")
+    if ctype == "salesforce":
+        schemas = SalesforceConnector(creds).list_schemas()
+    elif ctype == "mssql":
+        schemas = MssqlConnector(creds).list_schemas()
+    elif ctype == "mysql":
+        schemas = MysqlConnector(creds).list_schemas()
+    elif ctype == "redshift":
+        schemas = RedshiftConnector(creds).list_schemas()
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported datasource type: {ctype}")
+    return {"datasource_id": datasource_id, "database": database, "schemas": schemas}
+
+
+@app.get("/api/datasources/{datasource_id}/databases")
+def datasource_databases(datasource_id: str, request: Request):
+    user = _require_session_user(request)
+    ds = next((d for d in _datasources_for_user(user) if d.get("id") == datasource_id), None)
+    if not ds:
+        raise HTTPException(status_code=404, detail=f"Datasource '{datasource_id}' not found")
+    creds = dict(ds.get("credentials", {}))
+    ctype = ds.get("connection_type")
+    if ctype == "salesforce":
+        databases = SalesforceConnector(creds).list_databases()
+    elif ctype == "mssql":
+        databases = MssqlConnector(creds).list_databases()
+    elif ctype == "mysql":
+        databases = MysqlConnector(creds).list_databases()
+    elif ctype == "redshift":
+        databases = RedshiftConnector(creds).list_databases()
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported datasource type: {ctype}")
+    return {"datasource_id": datasource_id, "databases": databases}
+
+
+@app.get("/api/datasources/{datasource_id}/tables")
+def datasource_tables(
+    datasource_id: str,
+    request: Request,
+    schema: str | None = None,
+    database: str | None = None,
+):
+    user = _require_session_user(request)
+    ds = next((d for d in _datasources_for_user(user) if d.get("id") == datasource_id), None)
+    if not ds:
+        raise HTTPException(status_code=404, detail=f"Datasource '{datasource_id}' not found")
+    creds = dict(ds.get("credentials", {}))
+    if database:
+        creds["database"] = database
+        if ds.get("connection_type") == "mysql":
+            creds["schema"] = database
+    ctype = ds.get("connection_type")
+    if schema:
+        creds["schema"] = schema
+    if ctype == "salesforce":
+        tables = SalesforceConnector(creds).list_tables(schema)
+    elif ctype == "mssql":
+        tables = MssqlConnector(creds).list_tables(schema)
+    elif ctype == "mysql":
+        tables = MysqlConnector(creds).list_tables(schema)
+    elif ctype == "redshift":
+        s = schema or creds.get("schema") or "public"
+        tables = RedshiftConnector(creds).list_tables_for_schema(s)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported datasource type: {ctype}")
+    return {"datasource_id": datasource_id, "database": database, "schema": schema, "tables": tables}
+
+
+@app.get("/api/admin/users")
+def list_users(request: Request):
+    _require_admin_user(request)
+    return {"users": USER_STORE.list_users()}
+
+
+@app.post("/api/admin/users")
+async def create_user(request: Request):
+    _require_admin_user(request)
+    payload = await request.json()
+    username = str(payload.get("username", "")).strip()
+    password = str(payload.get("password", ""))
+    role = str(payload.get("role", "user")).strip().lower()
+    if not username or not password or role not in ("admin", "user"):
+        raise HTTPException(status_code=400, detail="username, password, and valid role are required")
+    try:
+        user = USER_STORE.create_user(username=username, password=password, role=role)
+        return user
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _resolved_credentials(
+    role: str,
+    expected_type: str,
+    profile_id: str | None,
+    datasource_id: str | None,
+    inline_credentials: Any,
+):
+    selected_id = datasource_id or profile_id
+    selected_kind = "datasource_id" if datasource_id else "profile_id"
+    if selected_id:
+        profile = DATASOURCE_STORE.get(selected_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail=f"{role}_{selected_kind} '{selected_id}' not found")
+        profile_type = str(profile.get("connection_type", ""))
+        if profile_type != expected_type:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{role}_{selected_kind} type '{profile_type}' does not match selected "
+                    f"{role}_type '{expected_type}'"
+                ),
+            )
+        return profile.get("credentials", {})
+    return inline_credentials
+
+
 def _build_mapping_dataframe(request: GenerateMappingRequest):
     metadata_service = MetadataService()
 
     if request.source_type == SourceType.salesforce:
-        source_creds = request.salesforce_credentials
+        source_creds_inline = request.salesforce_credentials
     elif request.source_type == SourceType.mssql:
-        source_creds = request.mssql_credentials
+        source_creds_inline = request.mssql_credentials
     else:
-        source_creds = request.mysql_credentials
+        source_creds_inline = request.mysql_credentials
 
     if request.target_type == TargetType.redshift:
-        target_creds = request.redshift_credentials
+        target_creds_inline = request.redshift_credentials
     elif request.target_type == TargetType.mssql:
-        target_creds = request.mssql_credentials
+        target_creds_inline = request.mssql_credentials
     else:
-        target_creds = request.mysql_credentials
+        target_creds_inline = request.mysql_credentials
+
+    source_creds = _resolved_credentials(
+        role="source",
+        expected_type=request.source_type.value,
+        profile_id=request.source_profile_id,
+        datasource_id=getattr(request, "source_datasource_id", None),
+        inline_credentials=source_creds_inline,
+    )
+    target_creds = _resolved_credentials(
+        role="target",
+        expected_type=request.target_type.value,
+        profile_id=request.target_profile_id,
+        datasource_id=getattr(request, "target_datasource_id", None),
+        inline_credentials=target_creds_inline,
+    )
+
+    source_creds = dict(source_creds)
+    target_creds = dict(target_creds)
+    if getattr(request, "source_database", None):
+        source_creds["database"] = request.source_database
+        if request.source_type == SourceType.mysql:
+            source_creds["schema"] = request.source_database
+    if getattr(request, "target_database", None):
+        target_creds["database"] = request.target_database
+        if request.target_type == TargetType.mysql:
+            target_creds["schema"] = request.target_database
 
     source_df = metadata_service.get_source_metadata(
         source_type=request.source_type,
@@ -280,6 +707,12 @@ def _build_request_from_form(form_data: dict) -> GenerateMappingRequest:
     payload = {
         "source_type": source_type,
         "target_type": target_type,
+        "source_profile_id": (form_data.get("source_profile_id") or "").strip() or None,
+        "target_profile_id": (form_data.get("target_profile_id") or "").strip() or None,
+        "source_datasource_id": (form_data.get("source_datasource_id") or "").strip() or None,
+        "target_datasource_id": (form_data.get("target_datasource_id") or "").strip() or None,
+        "source_database": (form_data.get("source_database") or "").strip() or None,
+        "target_database": (form_data.get("target_database") or "").strip() or None,
         "source_object": form_data.get("source_object", ""),
         "target_table": form_data.get("target_table", ""),
         "preview": False,
@@ -404,6 +837,9 @@ async def ui_generate_mapping(request: Request):
             # Ensure all expected keys exist so _build_request_from_form never KeyErrors
             for key in (
                 "source_type", "target_type", "source_object", "target_table",
+                "source_profile_id", "target_profile_id",
+                "source_datasource_id", "target_datasource_id",
+                "source_schema", "target_schema", "source_database", "target_database",
                 "sf_username", "sf_password", "sf_security_token", "sf_domain",
                 "rs_host", "rs_port", "rs_database", "rs_user", "rs_password", "rs_schema",
                 "mssql_host", "mssql_port", "mssql_database", "mssql_user", "mssql_password", "mssql_schema",

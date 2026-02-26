@@ -410,7 +410,14 @@
             Build: <span id="build-id">{{ app_build }}</span>
           </div>
         </div>
-        <div class="badge">Multi-Source · Multi-Target</div>
+        <div>
+          <div class="badge">Multi-Source · Multi-Target</div>
+          <div class="build-meta" style="text-align:right;">
+            User: {{ username or "user" }} ({{ user_role or "user" }})
+            {% if user_role == "admin" %}&nbsp;|&nbsp;<a href="/datasources" style="color:#93c5fd;">Data sources</a>{% endif %}
+            &nbsp;|&nbsp;<a href="/logout" style="color:#93c5fd;">Logout</a>
+          </div>
+        </div>
       </div>
 
       <div class="card-body">
@@ -508,14 +515,52 @@
 
           <div class="connection-row">
             <div class="connection-group">
+              <label for="source_datasource_id">Source data source</label>
+              <select id="source_datasource_id" name="source_datasource_id">
+                <option value="">-- Select configured source --</option>
+              </select>
+              <div class="field-hint">Configured by admin. Select one to load schemas/tables.</div>
+            </div>
+            <div class="connection-group">
+              <label for="target_datasource_id">Target data source</label>
+              <select id="target_datasource_id" name="target_datasource_id">
+                <option value="">-- Select configured target --</option>
+              </select>
+              <div class="field-hint">Configured by admin. Select one to load schemas/tables.</div>
+            </div>
+          </div>
+
+          <div class="connection-row">
+            <div class="connection-group">
+              <label for="source_schema">Source schema/database</label>
+              <select id="source_schema" name="source_schema">
+                <option value="">-- Select source schema --</option>
+              </select>
+            </div>
+            <div class="connection-group">
+              <label for="target_schema">Target schema/database</label>
+              <select id="target_schema" name="target_schema">
+                <option value="">-- Select target schema --</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="connection-row">
+            <div class="connection-group">
               <label for="source_object">Source object / table name</label>
               <input
                 id="source_object"
                 name="source_object"
                 type="text"
                 placeholder="e.g. Account or my_table"
+                list="source_object_list"
                 required
               />
+              <datalist id="source_object_list"></datalist>
+              <div class="test-connection-row">
+                <button type="button" class="btn-test" id="source-load-objects-btn">Load source tables</button>
+                <span id="source-load-result" class="test-result" aria-live="polite"></span>
+              </div>
             </div>
             <div class="connection-group">
               <label for="target_table">Target table name</label>
@@ -524,8 +569,14 @@
                 name="target_table"
                 type="text"
                 placeholder="e.g. account or my_table"
+                list="target_table_list"
                 required
               />
+              <datalist id="target_table_list"></datalist>
+              <div class="test-connection-row">
+                <button type="button" class="btn-test" id="target-load-objects-btn">Load target tables</button>
+                <span id="target-load-result" class="test-result" aria-live="polite"></span>
+              </div>
             </div>
           </div>
 
@@ -742,6 +793,16 @@
         var homeLanding = document.getElementById('home-landing');
         var presentationPanel = document.getElementById('presentation-panel');
         var workspace = document.getElementById('workspace');
+        var sourceDatasourceSelect = document.getElementById('source_datasource_id');
+        var targetDatasourceSelect = document.getElementById('target_datasource_id');
+        var sourceSchemaSelect = document.getElementById('source_schema');
+        var targetSchemaSelect = document.getElementById('target_schema');
+        var sourceLoadBtn = document.getElementById('source-load-objects-btn');
+        var targetLoadBtn = document.getElementById('target-load-objects-btn');
+        var sourceLoadResult = document.getElementById('source-load-result');
+        var targetLoadResult = document.getElementById('target-load-result');
+        var sourceObjectList = document.getElementById('source_object_list');
+        var targetTableList = document.getElementById('target_table_list');
         var launchWorkspaceBtn = document.getElementById('launch-workspace-btn');
         var launchFromPresentationBtn = document.getElementById('launch-from-presentation-btn');
         var presentationModeBtn = document.getElementById('presentation-mode-btn');
@@ -750,6 +811,7 @@
         var paramTabs = document.querySelectorAll('.param-tab');
         var passwordToggles = document.querySelectorAll('.password-toggle');
         var activeParamTab = 'source';
+        var profileCache = [];
         var submitStatus = document.getElementById('submit-status');
         var generateLabel = document.getElementById('generate-label');
         var generateSpinner = document.getElementById('generate-spinner');
@@ -780,6 +842,113 @@
               toggleBtn.textContent = show ? 'Hide' : 'Show';
             });
           });
+        }
+
+        function showInlineResult(el, message, isError) {
+          if (!el) return;
+          el.textContent = message;
+          el.className = 'test-result ' + (isError ? 'error' : 'success');
+        }
+
+        function buildDatasourceOptions(selectEl, connectionType, selectedId) {
+          if (!selectEl) return;
+          var options = ['<option value="">-- Select configured source/target --</option>'];
+          profileCache
+            .filter(function (p) { return p.connection_type === connectionType; })
+            .forEach(function (p) {
+              var selected = p.id === selectedId ? ' selected' : '';
+              options.push('<option value="' + p.id + '"' + selected + '>' + p.name + '</option>');
+            });
+          selectEl.innerHTML = options.join('');
+        }
+
+        function refreshDatasourceOptions() {
+          var sourceType = valueOf('source_type');
+          var targetType = valueOf('target_type');
+          var currentSource = sourceDatasourceSelect ? sourceDatasourceSelect.value : '';
+          var currentTarget = targetDatasourceSelect ? targetDatasourceSelect.value : '';
+          buildDatasourceOptions(sourceDatasourceSelect, sourceType, currentSource);
+          buildDatasourceOptions(targetDatasourceSelect, targetType, currentTarget);
+        }
+
+        function loadDatasources() {
+          fetch('/api/datasources')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              profileCache = data.datasources || [];
+              refreshDatasourceOptions();
+            })
+            .catch(function () {
+              profileCache = [];
+              refreshDatasourceOptions();
+            });
+        }
+
+        function fillDatalist(datalistEl, values) {
+          if (!datalistEl) return;
+          datalistEl.innerHTML = '';
+          values.forEach(function (item) {
+            var option = document.createElement('option');
+            option.value = item;
+            datalistEl.appendChild(option);
+          });
+        }
+
+        function loadObjectsForRole(role) {
+          var selectEl = role === 'source' ? sourceDatasourceSelect : targetDatasourceSelect;
+          var schemaEl = role === 'source' ? sourceSchemaSelect : targetSchemaSelect;
+          var resultEl = role === 'source' ? sourceLoadResult : targetLoadResult;
+          var btnEl = role === 'source' ? sourceLoadBtn : targetLoadBtn;
+          var datalistEl = role === 'source' ? sourceObjectList : targetTableList;
+          if (!selectEl || !btnEl) return;
+
+          if (!selectEl.value) {
+            showInlineResult(resultEl, 'Select a saved profile first.', true);
+            return;
+          }
+
+          btnEl.disabled = true;
+          showInlineResult(resultEl, 'Loading...', false);
+          var schema = schemaEl ? schemaEl.value : '';
+          var url = '/api/datasources/' + selectEl.value + '/tables';
+          if (schema) {
+            url += '?schema=' + encodeURIComponent(schema);
+          }
+          fetch(url)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              var items = data.tables || [];
+              fillDatalist(datalistEl, items);
+              showInlineResult(resultEl, 'Loaded ' + items.length + ' entries.', false);
+            })
+        function loadSchemasForRole(role) {
+          var dsSelect = role === 'source' ? sourceDatasourceSelect : targetDatasourceSelect;
+          var schemaSelect = role === 'source' ? sourceSchemaSelect : targetSchemaSelect;
+          if (!dsSelect || !schemaSelect) return;
+          if (!dsSelect.value) {
+            schemaSelect.innerHTML = '<option value="">-- Select schema --</option>';
+            return;
+          }
+          fetch('/api/datasources/' + dsSelect.value + '/schemas')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              var schemas = data.schemas || [];
+              var options = ['<option value="">-- Select schema --</option>'];
+              schemas.forEach(function (s) {
+                options.push('<option value="' + s + '">' + s + '</option>');
+              });
+              schemaSelect.innerHTML = options.join('');
+            })
+            .catch(function () {
+              schemaSelect.innerHTML = '<option value="">-- Select schema --</option>';
+            });
+        }
+            .catch(function (err) {
+              showInlineResult(resultEl, err.message || 'Failed to load entries.', true);
+            })
+            .finally(function () {
+              btnEl.disabled = false;
+            });
         }
 
         function enterPresentationMode() {
@@ -878,27 +1047,29 @@
         function validateGenerateForm() {
           var sourceType = valueOf('source_type');
           var targetType = valueOf('target_type');
+          var hasSourceProfile = sourceDatasourceSelect && !!sourceDatasourceSelect.value;
+          var hasTargetProfile = targetDatasourceSelect && !!targetDatasourceSelect.value;
           var shouldValidateSource = activeParamTab !== 'target';
           var shouldValidateTarget = activeParamTab !== 'source';
 
           if (!valueOf('source_object')) return 'Enter source object/table name.';
           if (!valueOf('target_table')) return 'Enter target table name.';
 
-          if (shouldValidateSource && sourceType === 'salesforce') {
+          if (shouldValidateSource && !hasSourceProfile && sourceType === 'salesforce') {
             if (!valueOf('sf_username') || !valueOf('sf_password') || !valueOf('sf_security_token')) {
               return 'For Salesforce source, enter username, password, and security token.';
             }
           }
 
-          if (shouldValidateTarget && targetType === 'redshift') {
+          if (shouldValidateTarget && !hasTargetProfile && targetType === 'redshift') {
             if (!valueOf('rs_host') || !valueOf('rs_database') || !valueOf('rs_user') || !valueOf('rs_password')) {
               return 'For Redshift target, enter host, database, user, and password.';
             }
           }
 
           var validateMysql =
-            (shouldValidateSource && sourceType === 'mysql') ||
-            (shouldValidateTarget && targetType === 'mysql');
+            (shouldValidateSource && !hasSourceProfile && sourceType === 'mysql') ||
+            (shouldValidateTarget && !hasTargetProfile && targetType === 'mysql');
           if (validateMysql) {
             if (!valueOf('mysql_host') || !valueOf('mysql_database') || !valueOf('mysql_user') || !valueOf('mysql_password')) {
               return 'For MySQL, enter host, database, user, and password.';
@@ -906,8 +1077,8 @@
           }
 
           var validateMssql =
-            (shouldValidateSource && sourceType === 'mssql') ||
-            (shouldValidateTarget && targetType === 'mssql');
+            (shouldValidateSource && !hasSourceProfile && sourceType === 'mssql') ||
+            (shouldValidateTarget && !hasTargetProfile && targetType === 'mssql');
           if (validateMssql) {
             var authType = valueOf('mssql_auth_type') || 'sql';
             if (!valueOf('mssql_host') || !valueOf('mssql_database')) {
@@ -1107,8 +1278,14 @@
             });
         }
 
-        sourceSelect.addEventListener('change', updateVisibility);
-        targetSelect.addEventListener('change', updateVisibility);
+        sourceSelect.addEventListener('change', function () {
+          updateVisibility();
+          refreshDatasourceOptions();
+        });
+        targetSelect.addEventListener('change', function () {
+          updateVisibility();
+          refreshDatasourceOptions();
+        });
         if (launchWorkspaceBtn) {
           launchWorkspaceBtn.addEventListener('click', launchWorkspace);
         }
@@ -1124,6 +1301,32 @@
         if (backHomeBtn) {
           backHomeBtn.addEventListener('click', goHome);
         }
+        if (sourceLoadBtn) {
+          sourceLoadBtn.addEventListener('click', function () { loadObjectsForRole('source'); });
+        }
+        if (targetLoadBtn) {
+          targetLoadBtn.addEventListener('click', function () { loadObjectsForRole('target'); });
+        }
+        if (sourceDatasourceSelect) {
+          sourceDatasourceSelect.addEventListener('change', function () {
+            loadSchemasForRole('source');
+          });
+        }
+        if (targetDatasourceSelect) {
+          targetDatasourceSelect.addEventListener('change', function () {
+            loadSchemasForRole('target');
+          });
+        }
+        if (sourceSchemaSelect) {
+          sourceSchemaSelect.addEventListener('change', function () {
+            loadObjectsForRole('source');
+          });
+        }
+        if (targetSchemaSelect) {
+          targetSchemaSelect.addEventListener('change', function () {
+            loadObjectsForRole('target');
+          });
+        }
         paramTabs.forEach(function (tabBtn) {
           tabBtn.addEventListener('click', function () {
             activeParamTab = tabBtn.getAttribute('data-tab') || 'all';
@@ -1137,6 +1340,7 @@
           mappingForm.addEventListener('submit', submitGenerateMapping);
         }
         initPasswordToggles();
+        loadDatasources();
         if (mssqlAuthSelect) {
           mssqlAuthSelect.addEventListener('change', updateMssqlAuth);
         }

@@ -37,3 +37,21 @@ class SalesforceConnector:
             )
         return pd.DataFrame(rows)
 
+    def list_objects(self) -> list[str]:
+        global_desc = self._sf.describe()
+        objects = global_desc.get("sobjects", [])
+        names = [str(obj.get("name")) for obj in objects if obj.get("name")]
+        return sorted(names)
+
+    def list_schemas(self) -> list[str]:
+        # Salesforce object model doesn't expose SQL-like schemas.
+        return ["default"]
+
+    def list_databases(self) -> list[str]:
+        # Keep a unified datasource UX across all connector types.
+        return ["default"]
+
+    def list_tables(self, schema: str | None = None) -> list[str]:
+        _ = schema
+        return self.list_objects()
+

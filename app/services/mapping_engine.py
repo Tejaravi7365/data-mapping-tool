@@ -1,3 +1,4 @@
+from difflib import SequenceMatcher
 from typing import Dict
 
 import pandas as pd
@@ -45,9 +46,30 @@ class MappingEngine:
         "ntext": "varchar",
         "image": "varchar",
     }
+    FUZZY_MATCH_THRESHOLD = 0.78
 
     def _normalize_name(self, name: str) -> str:
         return name.strip().lower()
+
+    def _normalize_for_similarity(self, name: str) -> str:
+        return "".join(ch for ch in self._normalize_name(name) if ch.isalnum())
+
+    def _best_fuzzy_target_key(self, source_field: str, candidate_target_keys):
+        """
+        Return best fuzzy target key and score from candidate keys, or (None, 0.0).
+        """
+        src_norm = self._normalize_for_similarity(source_field)
+        if not src_norm:
+            return None, 0.0
+
+        best_key = None
+        best_score = 0.0
+        for key in candidate_target_keys:
+            score = SequenceMatcher(None, src_norm, self._normalize_for_similarity(key)).ratio()
+            if score > best_score:
+                best_score = score
+                best_key = key
+        return best_key, best_score
 
     def _map_salesforce_type_to_redshift(self, sf_type: str) -> str:
         return self.TYPE_MAPPING.get(sf_type.lower(), sf_type.lower())
@@ -94,6 +116,7 @@ class MappingEngine:
         }
 
         mapping_rows = []
+        matched_target_keys = set()
         for _, src_row in source_df.iterrows():
             src_field = src_row.get("column_name", "")
             src_type = str(src_row.get("data_type", ""))
@@ -101,6 +124,20 @@ class MappingEngine:
 
             key = self._normalize_name(src_field)
             tgt_row = target_by_col.get(key)
+            is_suggested_match = False
+            suggested_score = 0.0
+
+            if tgt_row is not None:
+                matched_target_keys.add(key)
+            else:
+                candidate_keys = [k for k in target_by_col.keys() if k not in matched_target_keys]
+                fuzzy_key, fuzzy_score = self._best_fuzzy_target_key(src_field, candidate_keys)
+                if fuzzy_key is not None and fuzzy_score >= self.FUZZY_MATCH_THRESHOLD:
+                    tgt_row = target_by_col.get(fuzzy_key)
+                    if tgt_row is not None:
+                        matched_target_keys.add(fuzzy_key)
+                        is_suggested_match = True
+                        suggested_score = fuzzy_score
 
             if tgt_row is None:
                 mapping_rows.append(
@@ -133,7 +170,19 @@ class MappingEngine:
                 and src_length > target_length
             )
 
-            if not has_type_mismatch and not has_length_mismatch:
+            if is_suggested_match and not has_type_mismatch and not has_length_mismatch:
+                status = "Suggested Match"
+                notes = (
+                    f"Column name matched using fuzzy similarity "
+                    f"(score={suggested_score:.2f}). Please review."
+                )
+            elif is_suggested_match and (has_type_mismatch or has_length_mismatch):
+                status = "Suggested Match (Type/Length Review)"
+                notes = (
+                    f"Fuzzy name similarity score={suggested_score:.2f}. "
+                    f"Review data type/length compatibility."
+                )
+            elif not has_type_mismatch and not has_length_mismatch:
                 status = "Matched"
                 notes = ""
             elif has_type_mismatch and not has_length_mismatch:
@@ -165,12 +214,9 @@ class MappingEngine:
                 }
             )
 
-        source_cols_norm = {
-            self._normalize_name(row["column_name"]) for _, row in source_df.iterrows()
-        }
         for _, tgt_row in target_df.iterrows():
             key = self._normalize_name(tgt_row["column_name"])
-            if key in source_cols_norm:
+            if key in matched_target_keys:
                 continue
             mapping_rows.append(
                 {

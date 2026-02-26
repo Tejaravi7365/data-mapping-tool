@@ -75,6 +75,12 @@ class GenerateMappingRequest(BaseModel):
     redshift_credentials: Optional[RedshiftCredentials] = None
     mssql_credentials: Optional[MssqlCredentials] = None
     mysql_credentials: Optional[MysqlCredentials] = None
+    source_profile_id: Optional[str] = None
+    target_profile_id: Optional[str] = None
+    source_datasource_id: Optional[str] = None
+    target_datasource_id: Optional[str] = None
+    source_database: Optional[str] = None
+    target_database: Optional[str] = None
     source_object: str = Field(..., description="Source object or table name")
     target_table: str = Field(..., description="Target table name")
     preview: bool = Field(
@@ -86,13 +92,36 @@ class GenerateMappingRequest(BaseModel):
     def require_credentials_for_types(cls, values):
         st = values.get("source_type")
         tt = values.get("target_type")
-        if st == SourceType.salesforce and not values.get("salesforce_credentials"):
+        has_source_profile = bool(values.get("source_profile_id") or values.get("source_datasource_id"))
+        has_target_profile = bool(values.get("target_profile_id") or values.get("target_datasource_id"))
+
+        if st == SourceType.salesforce and not values.get("salesforce_credentials") and not has_source_profile:
             raise ValueError("salesforce_credentials required when source_type is salesforce")
-        if tt == TargetType.redshift and not values.get("redshift_credentials"):
+        if tt == TargetType.redshift and not values.get("redshift_credentials") and not has_target_profile:
             raise ValueError("redshift_credentials required when target_type is redshift")
-        if (st == SourceType.mssql or tt == TargetType.mssql) and not values.get("mssql_credentials"):
+        if (
+            st == SourceType.mssql
+            and not values.get("mssql_credentials")
+            and not has_source_profile
+        ):
+            raise ValueError("mssql_credentials required when source_type is mssql")
+        if (
+            tt == TargetType.mssql
+            and not values.get("mssql_credentials")
+            and not has_target_profile
+        ):
             raise ValueError("mssql_credentials required when source or target is mssql")
-        if (st == SourceType.mysql or tt == TargetType.mysql) and not values.get("mysql_credentials"):
+        if (
+            st == SourceType.mysql
+            and not values.get("mysql_credentials")
+            and not has_source_profile
+        ):
+            raise ValueError("mysql_credentials required when source_type is mysql")
+        if (
+            tt == TargetType.mysql
+            and not values.get("mysql_credentials")
+            and not has_target_profile
+        ):
             raise ValueError("mysql_credentials required when source or target is mysql")
         return values
 
@@ -171,4 +200,18 @@ class MappingPreviewResponse(BaseModel):
         }
 
         return cls(rows=rows, summary=summary)
+
+
+class ConnectionProfileType(str, Enum):
+    salesforce = "salesforce"
+    mssql = "mssql"
+    mysql = "mysql"
+    redshift = "redshift"
+
+
+class ConnectionProfileCreate(BaseModel):
+    name: str
+    connection_type: ConnectionProfileType
+    credentials: Dict[str, Any]
+    owner: Optional[str] = None
 

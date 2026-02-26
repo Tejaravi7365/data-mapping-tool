@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mapping History</title>
+    <style>
+      body { margin: 0; font-family: Arial, sans-serif; background: #0b1220; color: #e5e7eb; }
+      .top { height: 52px; background: #1e3a8a; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
+      .shell { display: grid; grid-template-columns: 230px 1fr; min-height: calc(100vh - 52px); }
+      .nav { background: #0f172a; border-right: 1px solid #1f2937; padding: 14px 10px; }
+      .nav a { display: block; color: #cbd5e1; text-decoration: none; padding: 10px 12px; border-radius: 8px; font-size: 0.9rem; }
+      .nav a.active, .nav a:hover { background: #1e3a8a; color: #fff; }
+      .main { padding: 18px; }
+      .card { background: #0f172a; border: 1px solid #1f2937; border-radius: 10px; padding: 14px; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+      th, td { text-align: left; padding: 9px; border-bottom: 1px solid #1f2937; }
+      .sub { color: #94a3b8; margin-bottom: 10px; font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div><strong>Data Mapping Studio</strong></div>
+      <div>{{ username }} ({{ user_role }}) | <a href="/logout" style="color:#dbeafe;">Logout</a></div>
+    </div>
+    <div class="shell">
+      <div class="nav">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/mapping">Mapping Workspace</a>
+        <a href="/mapping-history" class="active">Mapping History</a>
+        <a href="/datasources">Database Connections</a>
+        <a href="/settings">Settings</a>
+        <a href="/audit-logs">Audit Logs</a>
+      </div>
+      <div class="main">
+        <h2 style="margin:0 0 4px 0;">Mapping History</h2>
+        <div class="sub">View and monitor previous mapping runs</div>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>Run ID</th><th>Date/Time</th><th>User</th><th>Source DB</th><th>Target DB</th><th>Tables</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>MAP-2456</td><td>2026-02-25 14:32</td><td>{{ username }}</td><td>prod_analytics</td><td>warehouse_v2</td><td>15</td><td>Completed</td></tr>
+              <tr><td>MAP-2455</td><td>2026-02-24 19:15</td><td>Jane Doe</td><td>legacy_crm</td><td>new_crm</td><td>28</td><td>Completed</td></tr>
+              <tr><td>MAP-2454</td><td>2026-02-23 16:10</td><td>Admin User</td><td>ecommerce_db</td><td>analytics_db</td><td>12</td><td>Reviewed</td></tr>
+              <tr><td>MAP-2453</td><td>2026-02-22 12:30</td><td>Jane Doe</td><td>finance_db</td><td>reporting_db</td><td>8</td><td>Completed</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

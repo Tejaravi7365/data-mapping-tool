@@ -15,3 +15,17 @@
 2026-02-23 09:16:58,381 | INFO | data_mapping_app | Testing MySQL connection | context={'host': 'localhost', 'port': 3306, 'database': 'myrelatives', 'user': 'root', 'password': '***', 'schema': None}
 2026-02-23 09:17:39,262 | INFO | data_mapping_app | Testing MSSQL connection | context={'host': 'localhost\\SQLEXPRESS', 'port': 1433, 'database': 'SQLlearning', 'user': 'Admin_test', 'password': '***', 'schema': 'dbo', 'auth_type': <MssqlAuthType.sql: 'sql'>, 'driver': None, 'resolved_server': 'localhost\\SQLEXPRESS'}
 2026-02-23 09:17:42,564 | INFO | data_mapping_app | UI mapping generation succeeded | desktop_path=C:\Users\ravit\Desktop\mapping_mohansai_relatives_to_mohansai_relatives_20260223_091742.xlsx
+2026-02-23 10:05:33,646 | INFO | data_mapping_app | Testing MySQL connection | context={'host': 'localhost', 'port': 3306, 'database': 'myrelatives', 'user': 'root', 'password': '***', 'schema': None}
+2026-02-23 10:06:20,174 | INFO | data_mapping_app | Testing MSSQL connection | context={'host': 'localhost\\SQLEXPRESS', 'port': 1433, 'database': 'SQLlearning', 'user': 'Admint_test', 'password': '***', 'schema': 'dbo', 'auth_type': <MssqlAuthType.sql: 'sql'>, 'driver': None, 'resolved_server': 'localhost\\SQLEXPRESS'}
+2026-02-23 10:06:20,418 | ERROR | data_mapping_app | Connection test failed | type=mssql | stage=open_connection | context={'host': 'localhost\\SQLEXPRESS', 'port': 1433, 'database': 'SQLlearning', 'user': 'Admint_test', 'password': '***', 'schema': 'dbo', 'auth_type': <MssqlAuthType.sql: 'sql'>, 'driver': None, 'resolved_server': 'localhost\\SQLEXPRESS'} | error=('28000', "[28000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Login failed for user 'Admint_test'. (18456) (SQLDriverConnect); [28000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Login failed for user 'Admint_test'. (18456)")
+Traceback (most recent call last):
+  File "c:\projects\data-mapping-tool\app\main.py", line 101, in test_mssql_connection
+    conn = connector._get_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\projects\data-mapping-tool\app\connectors\mssql_connector.py", line 71, in _get_connection
+    return pyodbc.connect(conn_str, timeout=8)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pyodbc.InterfaceError: ('28000', "[28000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Login failed for user 'Admint_test'. (18456) (SQLDriverConnect); [28000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Login failed for user 'Admint_test'. (18456)")
+2026-02-23 10:06:41,020 | INFO | data_mapping_app | Testing MSSQL connection | context={'host': 'localhost\\SQLEXPRESS', 'port': 1433, 'database': 'SQLlearning', 'user': 'Admin_test', 'password': '***', 'schema': 'dbo', 'auth_type': <MssqlAuthType.sql: 'sql'>, 'driver': None, 'resolved_server': 'localhost\\SQLEXPRESS'}
+2026-02-23 10:06:59,171 | INFO | data_mapping_app | UI mapping generation succeeded | desktop_path=C:\Users\ravit\Desktop\mapping_mohansai_relatives_to_mohansai_relatives_20260223_100659.xlsx
+2026-02-25 17:22:31,445 | INFO | data_mapping_app | Connection profile created | id=a5a34702-eea9-4611-8e70-d0798adfa4a6 | type=mysql | owner=default

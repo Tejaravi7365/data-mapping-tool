@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Audit Logs</title>
+    <style>
+      body { margin: 0; font-family: Arial, sans-serif; background: #0b1220; color: #e5e7eb; }
+      .top { height: 52px; background: #1e3a8a; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
+      .shell { display: grid; grid-template-columns: 230px 1fr; min-height: calc(100vh - 52px); }
+      .nav { background: #0f172a; border-right: 1px solid #1f2937; padding: 14px 10px; }
+      .nav a { display: block; color: #cbd5e1; text-decoration: none; padding: 10px 12px; border-radius: 8px; font-size: 0.9rem; }
+      .nav a.active, .nav a:hover { background: #1e3a8a; color: #fff; }
+      .main { padding: 18px; }
+      .card { background: #0f172a; border: 1px solid #1f2937; border-radius: 10px; padding: 14px; }
+      .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+      select { width: 100%; box-sizing: border-box; background: #111827; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; padding: 8px; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+      th, td { text-align: left; padding: 8px; border-bottom: 1px solid #1f2937; }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div><strong>Data Mapping Studio</strong></div>
+      <div>{{ username }} ({{ user_role }}) | <a href="/logout" style="color:#dbeafe;">Logout</a></div>
+    </div>
+    <div class="shell">
+      <div class="nav">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/mapping">Mapping Workspace</a>
+        <a href="/mapping-history">Mapping History</a>
+        <a href="/datasources">Database Connections</a>
+        <a href="/settings">Settings</a>
+        <a href="/audit-logs" class="active">Audit Logs</a>
+      </div>
+      <div class="main">
+        <h2 style="margin:0 0 4px 0;">Audit Logs</h2>
+        <div style="color:#94a3b8;margin-bottom:10px;">Track all system activities and user actions</div>
+        <div class="card">
+          <div class="filters">
+            <select><option>All Actions</option><option>Generate Mapping</option><option>Test Connection</option><option>Delete Connection</option></select>
+            <select><option>All Users</option><option>{{ username }}</option><option>Admin User</option></select>
+          </div>
+          <table>
+            <thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Details</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>2026-02-25 14:32:15</td><td>{{ username }}</td><td>Generate Mapping</td><td>Created mapping MAP-2456</td><td>Success</td></tr>
+              <tr><td>2026-02-25 14:15:22</td><td>Admin User</td><td>Test Connection</td><td>finance_db connection successful</td><td>Success</td></tr>
+              <tr><td>2026-02-25 13:40:03</td><td>Jane Doe</td><td>Export Results</td><td>Exported MAP-2455</td><td>Success</td></tr>
+              <tr><td>2026-02-25 10:50:15</td><td>Jane Doe</td><td>Delete Connection</td><td>Attempted delete of prod_db</td><td>Failed</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

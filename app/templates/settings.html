@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Settings</title>
+    <style>
+      body { margin: 0; font-family: Arial, sans-serif; background: #0b1220; color: #e5e7eb; }
+      .top { height: 52px; background: #1e3a8a; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
+      .shell { display: grid; grid-template-columns: 230px 1fr; min-height: calc(100vh - 52px); }
+      .nav { background: #0f172a; border-right: 1px solid #1f2937; padding: 14px 10px; }
+      .nav a { display: block; color: #cbd5e1; text-decoration: none; padding: 10px 12px; border-radius: 8px; font-size: 0.9rem; }
+      .nav a.active, .nav a:hover { background: #1e3a8a; color: #fff; }
+      .main { padding: 18px; }
+      .card { background: #0f172a; border: 1px solid #1f2937; border-radius: 10px; padding: 14px; margin-bottom: 12px; max-width: 900px; }
+      label { display: block; margin-bottom: 7px; font-size: 0.9rem; }
+      input, select, textarea { width: 100%; box-sizing: border-box; background: #111827; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; padding: 8px; }
+      textarea { min-height: 70px; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .check { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #1f2937; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 8px; border-bottom: 1px solid #1f2937; font-size: 0.88rem; }
+      .btn { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div><strong>Data Mapping Studio</strong></div>
+      <div>{{ username }} ({{ user_role }}) | <a href="/logout" style="color:#dbeafe;">Logout</a></div>
+    </div>
+    <div class="shell">
+      <div class="nav">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/mapping">Mapping Workspace</a>
+        <a href="/mapping-history">Mapping History</a>
+        <a href="/datasources">Database Connections</a>
+        <a href="/settings" class="active">Settings</a>
+        <a href="/audit-logs">Audit Logs</a>
+      </div>
+      <div class="main">
+        <h2 style="margin:0 0 4px 0;">Settings</h2>
+        <div style="color:#94a3b8;margin-bottom:10px;">Configure application preferences</div>
+
+        <div class="card">
+          <h4>Default Mapping Settings</h4>
+          <div class="row">
+            <div>
+              <label>Default Fuzzy Threshold</label>
+              <input type="range" min="50" max="95" value="80" />
+            </div>
+            <div>
+              <label>Default Matching Mode</label>
+              <select><option>Bulk Multi-table Auto Mapping</option><option>One-to-One Table Mapping</option></select>
+            </div>
+          </div>
+          <label style="margin-top:8px;">Allowed Prefix/Suffix Patterns</label>
+          <textarea>_id,_cd,tbl_,v_tmp_</textarea>
+        </div>
+
+        <div class="card">
+          <h4>System Settings</h4>
+          <div class="check"><span>Enable Audit Logging</span><input type="checkbox" checked /></div>
+          <div class="check"><span>Auto-save Results</span><input type="checkbox" checked /></div>
+          <div class="check"><span>Email Notifications</span><input type="checkbox" /></div>
+          <label style="margin-top:10px;">Max Concurrent Mappings</label>
+          <input type="number" value="5" min="1" max="20" style="max-width:220px;" />
+        </div>
+
+        <div class="card">
+          <h4>Role Permissions</h4>
+          <table>
+            <thead><tr><th>Feature</th><th>Admin</th><th>Analyst</th><th>Viewer</th></tr></thead>
+            <tbody>
+              <tr><td>Create Mappings</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+              <tr><td>View History</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+              <tr><td>Export Results</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+              <tr><td>Manage Connections</td><td>Yes</td><td>No</td><td>No</td></tr>
+              <tr><td>Modify Settings</td><td>Yes</td><td>No</td><td>No</td></tr>
+            </tbody>
+          </table>
+          <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button class="btn" type="button">Save Settings</button></div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

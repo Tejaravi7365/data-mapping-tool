@@ -136,3 +136,51 @@ class MssqlConnector:
         )
         df["nullable"] = df["is_nullable"].str.upper().eq("YES")
         return df[["table_name", "column_name", "data_type", "length", "nullable"]]
+
+    def list_schemas(self) -> list[str]:
+        query = """
+            SELECT SCHEMA_NAME
+            FROM INFORMATION_SCHEMA.SCHEMATA
+            ORDER BY SCHEMA_NAME
+        """
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+        return [str(r[0]) for r in rows]
+
+    def list_databases(self) -> list[str]:
+        query = """
+            SELECT name
+            FROM sys.databases
+            WHERE state_desc = 'ONLINE'
+            ORDER BY name
+        """
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+        return [str(r[0]) for r in rows]
+
+    def list_tables(self, schema: str | None = None) -> list[str]:
+        schema = schema or self._credentials.get("schema", "dbo")
+        query = """
+            SELECT TABLE_NAME
+            FROM INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_SCHEMA = ?
+            ORDER BY TABLE_NAME
+        """
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(query, (schema,))
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+        return [str(r[0]) for r in rows]

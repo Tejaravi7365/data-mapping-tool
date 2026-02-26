@@ -7,7 +7,7 @@ This document helps security reviewers, architects, and business stakeholders as
 ## Security Posture Summary
 
 - The app is designed for **local execution** by default (`127.0.0.1`).
-- Credentials are passed at runtime and are **not persisted in a database** by the app.
+- Current prototype stores users and datasource definitions in local JSON files (`app/data/users.json`, `app/data/datasources.json`).
 - Logs mask sensitive fields such as passwords and tokens.
 - Data exposure risk is primarily operational (how users run/configure the app), not from background cloud storage in this codebase.
 
@@ -28,12 +28,13 @@ Risk:
 
 Current mitigations:
 - Password/token fields are masked in app logging.
-- No credential persistence layer is implemented in app code.
+- Credentials are not returned in clear text from datasource list APIs (sensitive fields are redacted in responses/logs).
 
 Recommended controls:
 - Use least-privilege database users (metadata read only where possible).
 - Use dedicated integration/service accounts.
 - Avoid shared credentials across teams.
+- Migrate datasource credential storage from local JSON to enterprise secrets management before production.
 
 ### 2) Unauthorized network access
 
@@ -71,6 +72,45 @@ Recommended controls:
 - Run vulnerability scans in CI/CD.
 - Keep Python runtime and ODBC drivers patched.
 
+### 5) Hosted deployment risk (EC2/VM shared URL)
+
+Risk:
+- Centralized deployment increases blast radius if access controls are weak.
+
+Recommended controls:
+- Keep app node private; expose only reverse proxy/ALB.
+- Enforce HTTPS/TLS and secure ciphers.
+- Use SSO/OIDC + RBAC before enabling broad access.
+- Restrict inbound access by corporate network/VPN/security groups.
+- Apply OS hardening and patch baselines on host instances.
+
+### 6) One-time connection profile storage risk
+
+Risk:
+- Persisting reusable connection definitions can expose credentials if stored insecurely.
+
+Recommended controls:
+- Store secrets in managed secret vault (AWS Secrets Manager/HashiCorp Vault), not plaintext.
+- Store only secret references in application database.
+- Encrypt data at rest for any configuration tables.
+- Apply least-privilege IAM policies for secret retrieval.
+- Audit secret read operations and rotate credentials periodically.
+
+Current implementation note:
+- The current initial release uses local JSON stores (`app/data/datasources.json`, `app/data/users.json`) for rapid prototyping.
+- This should be treated as non-production and migrated to a DB + secrets-backed design before enterprise rollout.
+
+### 7) Role/session controls in current build
+
+Current behavior:
+- Session cookie based login (`/login`) with prototype roles (`admin`, `user`).
+- Admin-gated management APIs/pages for datasource and user operations.
+
+Recommended controls:
+- Use signed/rotated session secrets and explicit session expiration.
+- Integrate enterprise identity (SSO/OIDC) instead of local user file.
+- Add audit event persistence for admin actions.
+
 ## Operational Best Practices
 
 - Run the tool on managed corporate machines only.
@@ -88,6 +128,8 @@ For production-grade use:
 - Add SSO/RBAC and audit trail.
 - Centralize logging in SIEM with redaction controls.
 - Integrate secrets manager instead of manual credential entry.
+- Add profile-level authorization checks for source/target selection.
+- Add approval workflow for onboarding new connection profiles.
 
 ## Security Assurance Statement (for stakeholders)
 

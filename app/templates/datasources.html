@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Data Sources - Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body { font-family: Arial, sans-serif; background: #0f172a; color: #e5e7eb; margin: 0; padding: 20px; }
+      .card { max-width: 980px; margin: 0 auto; background: #111827; border: 1px solid #334155; border-radius: 12px; padding: 16px; }
+      .top { display: flex; justify-content: space-between; margin-bottom: 12px; align-items: center; }
+      input, select, textarea { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #e5e7eb; }
+      textarea { min-height: 120px; font-family: Consolas, monospace; }
+      button { padding: 8px 12px; border: 0; border-radius: 8px; background: #2563eb; color: white; cursor: pointer; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+      th, td { border-bottom: 1px solid #334155; padding: 8px; text-align: left; font-size: 0.9rem; }
+      .msg { margin-top: 8px; font-size: 0.85rem; color: #93c5fd; }
+      .danger { background: #b91c1c; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="top">
+        <h3>Admin: Data Sources</h3>
+        <div>
+          <a href="/mapping" style="color:#93c5fd;">Mapping</a> |
+          <a href="/logout" style="color:#93c5fd;">Logout</a>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Name</label>
+          <input id="ds_name" placeholder="e.g. prod-mssql-finance" />
+        </div>
+        <div>
+          <label>Connection type</label>
+          <select id="ds_type">
+            <option value="mssql">mssql</option>
+            <option value="mysql">mysql</option>
+            <option value="redshift">redshift</option>
+            <option value="salesforce">salesforce</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Owner role</label>
+          <select id="ds_owner_role">
+            <option value="all">all</option>
+            <option value="admin">admin</option>
+            <option value="user">user</option>
+          </select>
+        </div>
+        <div></div>
+      </div>
+      <div>
+        <label>Credentials JSON</label>
+        <textarea id="ds_credentials" placeholder='{"host":"localhost","database":"mydb","user":"u","password":"p"}'></textarea>
+      </div>
+      <div style="margin-top:10px;">
+        <button id="create_ds_btn" type="button">Create Data Source</button>
+      </div>
+      <div id="msg" class="msg"></div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Owner role</th>
+            <th>Created by</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="ds_rows"></tbody>
+      </table>
+    </div>
+    <script>
+      (function () {
+        var rowsEl = document.getElementById('ds_rows');
+        var msgEl = document.getElementById('msg');
+        function show(msg) { msgEl.textContent = msg; }
+
+        function load() {
+          fetch('/api/datasources')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              var rows = data.datasources || [];
+              rowsEl.innerHTML = rows.map(function (d) {
+                return '<tr>' +
+                  '<td>' + d.name + '</td>' +
+                  '<td>' + d.connection_type + '</td>' +
+                  '<td>' + (d.owner_role || 'all') + '</td>' +
+                  '<td>' + (d.created_by || '') + '</td>' +
+                  '<td><button class="danger" data-id="' + d.id + '">Delete</button></td>' +
+                '</tr>';
+              }).join('');
+              rowsEl.querySelectorAll('button[data-id]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                  fetch('/api/datasources/' + btn.getAttribute('data-id'), { method: 'DELETE' })
+                    .then(function () { load(); });
+                });
+              });
+            });
+        }
+
+        document.getElementById('create_ds_btn').addEventListener('click', function () {
+          var name = document.getElementById('ds_name').value.trim();
+          var connection_type = document.getElementById('ds_type').value;
+          var owner_role = document.getElementById('ds_owner_role').value;
+          var credentialsText = document.getElementById('ds_credentials').value.trim();
+          if (!name || !credentialsText) { show('Enter name and credentials JSON.'); return; }
+          var credentials;
+          try { credentials = JSON.parse(credentialsText); } catch (e) { show('Invalid credentials JSON.'); return; }
+
+          fetch('/api/datasources', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name, connection_type: connection_type, owner_role: owner_role, credentials: credentials })
+          })
+            .then(function (r) { return r.json(); })
+            .then(function () {
+              show('Data source created.');
+              load();
+            })
+            .catch(function (e) { show(e.message || 'Create failed'); });
+        });
+
+        load();
+      })();
+    </script>
+  </body>
+</html>

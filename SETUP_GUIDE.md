@@ -61,12 +61,17 @@ This avoids conflicts with old app instances and reduces accidental network expo
 
 ## UI flow summary
 
-1. Review landing overview (or use Presentation Mode).
-2. Click `Launch Mapping Studio`.
-3. Select source and target database types from dropdowns.
-4. Fill connection parameters (Source/Target/Both tabs).
-5. Test connections.
-6. Generate mapping sheet.
+1. Open `/` and login (`admin/admin123` or `user/user123` in prototype).
+2. You are redirected to `Dashboard`.
+3. Use left sidebar to navigate to:
+   - `Mapping Workspace`
+   - `Mapping History`
+   - `Database Connections` (admin page)
+   - `Settings`
+   - `Audit Logs`
+4. In `Mapping Workspace`, select source datasource + schema + table.
+5. Select target datasource + schema + table.
+6. Click `Generate Mapping`.
 
 On success:
 
@@ -87,9 +92,11 @@ On success:
 ### Old UI / old endpoints appear
 
 - Hard refresh browser (`Ctrl+F5`).
-- Stop stale uvicorn processes and restart.
+- Stop stale `python/uvicorn` processes and restart.
 - Check version endpoint:
   - `http://127.0.0.1:8101/health/version`
+- If still blocked, temporarily run on another port:
+  - `python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8110 --app-dir path\\to\\data-mapping-tool`
 
 ### MSSQL driver or connectivity issues
 
@@ -104,6 +111,16 @@ On success:
   ```bash
   pip install -r requirements.txt
   ```
+
+### Datasource APIs (optional)
+
+You can manage reusable datasources via API docs (`/docs`):
+
+- `GET /api/datasources`
+- `POST /api/datasources`
+- `DELETE /api/datasources/{datasource_id}`
+- `GET /api/datasources/{datasource_id}/schemas`
+- `GET /api/datasources/{datasource_id}/tables`
 
 ## Optional: access from other devices
 
@@ -120,3 +137,46 @@ http://<your-pc-ip-address>:8101
 ```
 
 Also allow inbound traffic on the chosen port in firewall policy.
+
+## Hosted deployment (EC2/VM) for shared URL access
+
+Use this when multiple users should access the tool via a single link.
+
+### Reference architecture
+
+- App host: EC2/VM (private subnet preferred)
+- App runtime: FastAPI (`uvicorn`/`gunicorn`) as a managed service
+- Reverse proxy: Nginx
+- TLS/entry: ALB/Nginx with HTTPS
+- DNS: internal domain (for enterprise access)
+
+### High-level deployment steps
+
+1. Provision Linux VM/EC2 and open required network paths.
+2. Install Python, create venv, install `requirements.txt`.
+3. Run app as service:
+   - `python -m uvicorn app.main:app --host 127.0.0.1 --port 8101`
+4. Configure Nginx reverse proxy from `443 -> 127.0.0.1:8101`.
+5. Add TLS certificate and DNS record.
+6. Validate:
+   - `/`
+   - `/docs`
+   - `/health/version`
+
+### Production hardening checklist
+
+- Restrict direct app port exposure (only proxy/ALB should be public).
+- Enable centralized logs/monitoring.
+- Add authentication (SSO/OIDC) before broad rollout.
+- Move DB credentials to secrets manager.
+- Use role-based access controls for connection profiles.
+
+## Future operating model (one-time connection setup)
+
+Planned flow for enterprise usability:
+
+1. Admin configures approved connection profiles once.
+2. Tool reads available profiles by user role.
+3. User picks source/target profile from dropdown.
+4. Tool loads schema/table dropdowns dynamically.
+5. User can optionally select multiple tables for batch mapping output.

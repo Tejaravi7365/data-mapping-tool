@@ -67,3 +67,57 @@ class RedshiftConnector:
 
         return df
 
+    def list_tables(self) -> list[str]:
+        schema = self._credentials.get("schema", "public")
+        query = """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = %s
+              AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+        """
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (schema,))
+                rows = cur.fetchall()
+        return [str(r[0]) for r in rows]
+
+    def list_schemas(self) -> list[str]:
+        query = """
+            SELECT schema_name
+            FROM information_schema.schemata
+            ORDER BY schema_name
+        """
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                rows = cur.fetchall()
+        return [str(r[0]) for r in rows]
+
+    def list_databases(self) -> list[str]:
+        query = """
+            SELECT datname
+            FROM pg_database
+            WHERE datallowconn = true
+            ORDER BY datname
+        """
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                rows = cur.fetchall()
+        return [str(r[0]) for r in rows]
+
+    def list_tables_for_schema(self, schema: str) -> list[str]:
+        query = """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = %s
+              AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+        """
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (schema,))
+                rows = cur.fetchall()
+        return [str(r[0]) for r in rows]
+

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard</title>
+    <style>
+      body { margin: 0; font-family: Arial, sans-serif; background: #0b1220; color: #e5e7eb; }
+      .top { height: 52px; background: #1e3a8a; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
+      .shell { display: grid; grid-template-columns: 230px 1fr; min-height: calc(100vh - 52px); }
+      .nav { background: #0f172a; border-right: 1px solid #1f2937; padding: 14px 10px; }
+      .nav a { display: block; color: #cbd5e1; text-decoration: none; padding: 10px 12px; border-radius: 8px; font-size: 0.9rem; }
+      .nav a.active, .nav a:hover { background: #1e3a8a; color: #fff; }
+      .main { padding: 18px; }
+      .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+      .card { background: #0f172a; border: 1px solid #1f2937; border-radius: 10px; padding: 14px; }
+      .title { font-size: 1.3rem; font-weight: 700; margin-bottom: 2px; }
+      .sub { color: #94a3b8; margin-bottom: 12px; font-size: 0.9rem; }
+      .metric { font-size: 1.8rem; font-weight: 700; margin-top: 8px; }
+      .muted { color: #94a3b8; font-size: 0.8rem; }
+      .split { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-top: 12px; }
+      .bars { display: flex; gap: 10px; align-items: flex-end; height: 170px; }
+      .bar { width: 24px; background: #10b981; border-radius: 5px 5px 0 0; }
+      .pie { width: 180px; height: 180px; margin: 0 auto; border-radius: 50%; background: conic-gradient(#10b981 0 67%, #f59e0b 67% 90%, #ef4444 90% 100%); }
+      table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.88rem; }
+      th, td { padding: 8px; border-bottom: 1px solid #1f2937; text-align: left; }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div><strong>Data Mapping Studio</strong></div>
+      <div>{{ username }} ({{ user_role }}) | <a href="/logout" style="color:#dbeafe;">Logout</a></div>
+    </div>
+    <div class="shell">
+      <div class="nav">
+        <a href="/dashboard" class="active">Dashboard</a>
+        <a href="/mapping">Mapping Workspace</a>
+        <a href="/mapping-history">Mapping History</a>
+        <a href="/datasources">Database Connections</a>
+        <a href="/settings">Settings</a>
+        <a href="/audit-logs">Audit Logs</a>
+      </div>
+      <div class="main">
+        <div class="title">Dashboard</div>
+        <div class="sub">Overview of your data mapping activity</div>
+        <div class="cards">
+          <div class="card"><div>Total Mappings</div><div class="metric">124</div><div class="muted">+12% from last month</div></div>
+          <div class="card"><div>Success Rate</div><div class="metric">94.5%</div><div class="muted">+2.1% from last month</div></div>
+          <div class="card"><div>Active Connections</div><div class="metric">8</div><div class="muted">+1 from last month</div></div>
+          <div class="card"><div>Pending Reviews</div><div class="metric">23</div><div class="muted">-5 from last month</div></div>
+        </div>
+        <div class="split">
+          <div class="card">
+            <div style="font-weight:700; margin-bottom:6px;">Mapping Trends</div>
+            <div class="bars">
+              <div class="bar" style="height:70px;"></div><div class="bar" style="height:110px;"></div><div class="bar" style="height:95px;"></div><div class="bar" style="height:130px;"></div><div class="bar" style="height:80px;"></div><div class="bar" style="height:140px;"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div style="font-weight:700; margin-bottom:12px;">Match Distribution</div>
+            <div class="pie"></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <div style="font-weight:700;">Recent Mapping Runs</div>
+          <table>
+            <thead><tr><th>Run ID</th><th>Date</th><th>Source DB</th><th>Target DB</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>MAP-2456</td><td>2026-02-25</td><td>prod_analytics</td><td>warehouse_v2</td><td>Completed</td></tr>
+              <tr><td>MAP-2455</td><td>2026-02-24</td><td>legacy_crm</td><td>new_crm</td><td>Completed</td></tr>
+              <tr><td>MAP-2454</td><td>2026-02-23</td><td>ecommerce_db</td><td>analytics_db</td><td>Reviewed</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

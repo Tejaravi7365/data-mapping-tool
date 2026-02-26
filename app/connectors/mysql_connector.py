@@ -48,3 +48,51 @@ class MysqlConnector:
 
         df["nullable"] = df["is_nullable"].str.upper().eq("YES")
         return df[["table_name", "column_name", "data_type", "length", "nullable"]]
+
+    def list_schemas(self) -> list[str]:
+        query = """
+            SELECT SCHEMA_NAME
+            FROM information_schema.SCHEMATA
+            ORDER BY SCHEMA_NAME
+        """
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+        return [str(r[0]) for r in rows]
+
+    def list_databases(self) -> list[str]:
+        query = """
+            SELECT SCHEMA_NAME
+            FROM information_schema.SCHEMATA
+            ORDER BY SCHEMA_NAME
+        """
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+        return [str(r[0]) for r in rows]
+
+    def list_tables(self, schema: str | None = None) -> list[str]:
+        database = self._credentials.get("database")
+        schema = schema or self._credentials.get("schema") or database
+        query = """
+            SELECT TABLE_NAME
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = %s AND TABLE_TYPE = 'BASE TABLE'
+            ORDER BY TABLE_NAME
+        """
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(query, (schema,))
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+        return [str(r[0]) for r in rows]

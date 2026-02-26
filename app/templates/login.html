@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Login - Data Mapping Tool</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #0f172a;
+        color: #e5e7eb;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+      }
+      .card {
+        width: 100%;
+        max-width: 420px;
+        background: #111827;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 20px;
+      }
+      input {
+        width: 100%;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #475569;
+        background: #0f172a;
+        color: #e5e7eb;
+        margin-bottom: 10px;
+      }
+      button {
+        width: 100%;
+        padding: 10px;
+        border: 0;
+        border-radius: 8px;
+        background: #2563eb;
+        color: white;
+        cursor: pointer;
+      }
+      .error {
+        color: #fca5a5;
+        font-size: 0.85rem;
+        margin-bottom: 10px;
+      }
+      .hint {
+        color: #94a3b8;
+        font-size: 0.8rem;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h3>Data Mapping Tool Login</h3>
+      {% if error %}
+      <div class="error">{{ error }}</div>
+      {% endif %}
+      <form method="post" action="/login">
+        <input type="text" name="username" placeholder="Username" required />
+        <input type="password" name="password" placeholder="Password" required />
+        <button type="submit">Login</button>
+      </form>
+      <div class="hint">
+        Build: {{ app_build }}<br />
+        Default demo users: <code>admin/admin123</code>, <code>user/user123</code>
+      </div>
+    </div>
+  </body>
+</html>

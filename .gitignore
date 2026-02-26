@@ -41,6 +41,8 @@ Thumbs.db
 *.xlsx
 *.xls
 mapping_sheet.xlsx
+app/logs/
+app/data/connection_profiles.json
 
 # Environment variables
 .env
