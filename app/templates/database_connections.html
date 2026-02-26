@@ -20,7 +20,18 @@
       .status { color: #10b981; font-size: 0.85rem; margin-top: 3px; }
       .status.fail { color: #ef4444; }
       .small { color: #94a3b8; font-size: 0.82rem; margin-top: 2px; }
+      .diag { margin-top: 8px; padding: 8px; border: 1px solid #334155; border-radius: 8px; background: #111827; }
+      .diag-row { font-size: 0.78rem; color: #cbd5e1; margin-top: 3px; }
+      .diag-row .k { color: #94a3b8; }
+      .diag-ok { color: #10b981; }
+      .diag-bad { color: #ef4444; }
       .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+      .tab-btn { border: 1px solid #334155; background: #111827; color: #cbd5e1; border-radius: 8px; padding: 7px 10px; cursor: pointer; }
+      .tab-btn.active { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }
+      .panel { display: none; }
+      .panel.show { display: block; }
+      .test-result { margin-top: 10px; padding: 8px; border: 1px solid #334155; border-radius: 8px; background: #111827; white-space: pre-wrap; font-size: 0.82rem; }
       .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; }
       .modal.show { display: flex; }
       .modal-card { width: min(720px, 92vw); background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 14px; }
@@ -58,46 +69,60 @@
     <div id="create_modal" class="modal">
       <div class="modal-card">
         <h3 style="margin-top:0;">Create Data Source</h3>
-        <div class="row">
-          <div>
-            <label>Name</label>
-            <input id="ds_name" placeholder="e.g. prod-mssql-finance" />
+        <div class="tabs">
+          <button type="button" class="tab-btn active" id="tab_details">Connection Details</button>
+          <button type="button" class="tab-btn" id="tab_test">Test Connection</button>
+        </div>
+        <div id="panel_details" class="panel show">
+          <div class="row">
+            <div>
+              <label>Name</label>
+              <input id="ds_name" placeholder="e.g. prod-mssql-finance" />
+            </div>
+            <div>
+              <label>Type</label>
+              <select id="ds_type">
+                <option value="mssql">mssql</option>
+                <option value="mysql">mysql</option>
+                <option value="redshift">redshift</option>
+                <option value="salesforce">salesforce</option>
+              </select>
+            </div>
           </div>
-          <div>
-            <label>Type</label>
-            <select id="ds_type">
-              <option value="mssql">mssql</option>
-              <option value="mysql">mysql</option>
-              <option value="redshift">redshift</option>
-              <option value="salesforce">salesforce</option>
-            </select>
+          <div class="row" style="margin-top:8px;">
+            <div>
+              <label>Owner Role</label>
+              <select id="ds_owner_role">
+                <option value="all">all</option>
+                <option value="admin">admin</option>
+                <option value="user">user</option>
+              </select>
+            </div>
+            <div id="cred_hint" class="small" style="display:flex;align-items:flex-end;">Enter connection parameters (no JSON required).</div>
+          </div>
+          <div id="credential_fields" style="margin-top:8px;"></div>
+          <div class="row" style="margin-top:8px;">
+            <div>
+              <label>Default Database (optional)</label>
+              <select id="ds_database"></select>
+            </div>
+            <div>
+              <label>Default Schema (optional)</label>
+              <select id="ds_schema"></select>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button type="button" id="discover_databases" class="btn" style="background:#334155;">Load Databases</button>
+            <button type="button" id="discover_schemas" class="btn" style="background:#334155;">Load Schemas</button>
           </div>
         </div>
-        <div class="row" style="margin-top:8px;">
-          <div>
-            <label>Owner Role</label>
-            <select id="ds_owner_role">
-              <option value="all">all</option>
-              <option value="admin">admin</option>
-              <option value="user">user</option>
-            </select>
+        <div id="panel_test" class="panel">
+          <div class="small">Validate the current form values before saving. For masked secrets, enter password/token again to test.</div>
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" id="test_draft_btn" class="btn">Run Test Using Current Values</button>
+            <button type="button" id="preflight_btn" class="btn" style="background:#4f46e5;">Run Preflight Diagnostics</button>
           </div>
-          <div id="cred_hint" class="small" style="display:flex;align-items:flex-end;">Enter connection parameters (no JSON required).</div>
-        </div>
-        <div id="credential_fields" style="margin-top:8px;"></div>
-        <div class="row" style="margin-top:8px;">
-          <div>
-            <label>Default Database (optional)</label>
-            <select id="ds_database"></select>
-          </div>
-          <div>
-            <label>Default Schema (optional)</label>
-            <select id="ds_schema"></select>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <button type="button" id="discover_databases" class="btn" style="background:#334155;">Load Databases</button>
-          <button type="button" id="discover_schemas" class="btn" style="background:#334155;">Load Schemas</button>
+          <div id="test_result" class="test-result">No test run yet.</div>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
           <button type="button" id="cancel_modal" class="btn" style="background:#334155;">Cancel</button>
@@ -113,6 +138,13 @@
         var modal = document.getElementById('create_modal');
         var modalTitleEl = modal.querySelector('h3');
         var submitBtn = document.getElementById('create_ds_btn');
+        var tabDetailsBtn = document.getElementById('tab_details');
+        var tabTestBtn = document.getElementById('tab_test');
+        var panelDetailsEl = document.getElementById('panel_details');
+        var panelTestEl = document.getElementById('panel_test');
+        var testDraftBtn = document.getElementById('test_draft_btn');
+        var preflightBtn = document.getElementById('preflight_btn');
+        var testResultEl = document.getElementById('test_result');
         var credentialFieldsEl = document.getElementById('credential_fields');
         var dsNameEl = document.getElementById('ds_name');
         var dsTypeEl = document.getElementById('ds_type');
@@ -168,6 +200,14 @@
           selectEl.innerHTML = html.join('');
         }
 
+        function switchTab(tabName) {
+          var details = tabName !== 'test';
+          tabDetailsBtn.classList.toggle('active', details);
+          tabTestBtn.classList.toggle('active', !details);
+          panelDetailsEl.classList.toggle('show', details);
+          panelTestEl.classList.toggle('show', !details);
+        }
+
         function parseMaybeJson(text) {
           if (!text) return null;
           try { return JSON.parse(text); } catch (e) { return null; }
@@ -184,6 +224,28 @@
               return payload || {};
             });
           });
+        }
+
+        function renderPreflightResult(res) {
+          var pre = res.preflight || {};
+          var checklist = res.checklist || [];
+          var lines = [
+            'Status: ' + (res.status || (res.ok ? 'Success' : 'Failed')),
+            'Stage: ' + (res.stage || '-'),
+            'Resolved Server: ' + (pre.resolved_server || '-'),
+            'Auth Type: ' + (pre.auth_type || '-'),
+            'Installed SQL Drivers: ' + ((pre.installed_sql_server_drivers || []).join(', ') || '-'),
+            'Detail: ' + (res.detail || (res.ok ? 'Connection validated successfully.' : '-'))
+          ];
+          if (res.hint) lines.push('Hint: ' + res.hint);
+          if (checklist.length) {
+            lines.push('Checklist:');
+            checklist.forEach(function (c) {
+              var mark = (c.status || '').toLowerCase() === 'ok' ? '[OK]' : '[ACTION]';
+              lines.push('- ' + mark + ' ' + (c.item || '-') + ': ' + (c.detail || '-'));
+            });
+          }
+          testResultEl.textContent = lines.join('\n');
         }
 
         function renderCredentialFields() {
@@ -265,6 +327,8 @@
           dsOwnerRoleEl.value = 'all';
           dsTypeEl.disabled = false;
           renderCredentialFields();
+          testResultEl.textContent = 'No test run yet.';
+          switchTab('details');
         }
 
         function enterCreateMode() {
@@ -289,6 +353,8 @@
           fillSelect(dsSchemaEl, schemaVal ? [schemaVal] : [], '-- Discover schemas --');
           if (dbVal) dsDatabaseEl.value = dbVal;
           if (schemaVal) dsSchemaEl.value = schemaVal;
+          testResultEl.textContent = 'No test run yet.';
+          switchTab('details');
           modal.classList.add('show');
         }
 
@@ -317,6 +383,29 @@
             .catch(function (e) { show(e.message || 'Discovery failed', true); });
         }
 
+        function fmtTs(value) {
+          var d = new Date(value || '');
+          if (Number.isNaN(d.getTime())) return '-';
+          return d.toISOString().replace('T', ' ').slice(0, 16);
+        }
+
+        function diagnosticsHtml(ds) {
+          var c = ds.credentials || {};
+          var d = ds.diagnostics || {};
+          var status = d.last_test_status || 'Not Tested';
+          var statusClass = status === 'Success' ? 'diag-ok' : (status === 'Failed' ? 'diag-bad' : '');
+          var detail = d.last_test_detail || '';
+          var hint = d.last_test_hint || '';
+          return '<div class="diag">' +
+            '<div class="diag-row"><span class="k">Last test:</span> <span class="' + statusClass + '">' + status + '</span> @ ' + fmtTs(d.last_tested_at) + '</div>' +
+            '<div class="diag-row"><span class="k">Host:</span> ' + (c.host || '-') + '</div>' +
+            '<div class="diag-row"><span class="k">Auth:</span> ' + (c.auth_type || '-') + '</div>' +
+            '<div class="diag-row"><span class="k">Driver:</span> ' + (c.driver || '-') + '</div>' +
+            (detail ? '<div class="diag-row"><span class="k">Detail:</span> ' + detail + '</div>' : '') +
+            (hint ? '<div class="diag-row"><span class="k">Hint:</span> ' + hint + '</div>' : '') +
+          '</div>';
+        }
+
         function cardHtml(d) {
           var c = d.credentials || {};
           var loc = [];
@@ -330,6 +419,7 @@
             '<div class="small">Owner role: ' + (d.owner_role || 'all') + '</div>' +
             '<div class="small">Created by: ' + (d.created_by || '') + '</div>' +
             (loc.length ? '<div class="small">' + loc.join(' | ') + '</div>' : '') +
+            diagnosticsHtml(d) +
             '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">' +
               '<button class="btn" data-edit="' + d.id + '" style="padding:8px 10px;background:#4f46e5;">Edit</button>' +
               '<button class="btn" data-test="' + d.id + '" style="padding:8px 10px;">Test Connection</button>' +
@@ -363,8 +453,15 @@
           cardsEl.querySelectorAll('button[data-test]').forEach(function (btn) {
             btn.addEventListener('click', function () {
               var id = btn.getAttribute('data-test');
-              requestJson('/api/datasources/' + id + '/schemas')
-                .then(function () { show('Connection test completed successfully.'); })
+              requestJson('/api/datasources/' + id + '/test', { method: 'POST' })
+                .then(function (res) {
+                  if (res.ok) {
+                    show('Connection test completed successfully.');
+                  } else {
+                    show((res.detail || 'Connection test failed') + (res.hint ? ' | ' + res.hint : ''), true);
+                  }
+                  load();
+                })
                 .catch(function (e) { show(e.message || 'Connection test failed', true); });
             });
           });
@@ -387,10 +484,66 @@
         modal.addEventListener('click', function (evt) {
           if (evt.target === modal) modal.classList.remove('show');
         });
+        tabDetailsBtn.addEventListener('click', function () { switchTab('details'); });
+        tabTestBtn.addEventListener('click', function () { switchTab('test'); });
         dsTypeEl.addEventListener('change', renderCredentialFields);
         dsDatabaseEl.addEventListener('change', function () { discover('schemas'); });
         document.getElementById('discover_databases').addEventListener('click', function () { discover('databases'); });
         document.getElementById('discover_schemas').addEventListener('click', function () { discover('schemas'); });
+        testDraftBtn.addEventListener('click', function () {
+          var credentials = collectCredentials();
+          testResultEl.textContent = 'Testing...';
+          requestJson('/api/datasources/test/draft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              connection_type: dsTypeEl.value,
+              credentials: credentials
+            })
+          })
+            .then(function (res) {
+              var lines = [
+                'Status: ' + (res.status || (res.ok ? 'Success' : 'Failed')),
+                'Stage: ' + (res.stage || '-'),
+                'Detail: ' + (res.detail || (res.ok ? 'Connection validated successfully.' : '-'))
+              ];
+              if (res.hint) lines.push('Hint: ' + res.hint);
+              testResultEl.textContent = lines.join('\n');
+              if (res.ok) {
+                show('Draft connection test passed.');
+              } else {
+                show((res.detail || 'Draft connection test failed') + (res.hint ? ' | ' + res.hint : ''), true);
+              }
+            })
+            .catch(function (e) {
+              testResultEl.textContent = 'Status: Failed\nDetail: ' + (e.message || 'Draft connection test failed');
+              show(e.message || 'Draft connection test failed', true);
+            });
+        });
+        preflightBtn.addEventListener('click', function () {
+          var credentials = collectCredentials();
+          testResultEl.textContent = 'Running preflight diagnostics...';
+          requestJson('/api/diagnostics/datasource-preflight', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              connection_type: dsTypeEl.value,
+              credentials: credentials
+            })
+          })
+            .then(function (res) {
+              renderPreflightResult(res);
+              if (res.ok) {
+                show('Preflight diagnostics passed.');
+              } else {
+                show((res.detail || 'Preflight diagnostics found issues') + (res.hint ? ' | ' + res.hint : ''), true);
+              }
+            })
+            .catch(function (e) {
+              testResultEl.textContent = 'Status: Failed\nDetail: ' + (e.message || 'Preflight diagnostics failed');
+              show(e.message || 'Preflight diagnostics failed', true);
+            });
+        });
 
         submitBtn.addEventListener('click', function () {
           var name = dsNameEl.value.trim();
@@ -402,8 +555,8 @@
           var missing = validateCredentials(connection_type, credentials, isEdit);
           if (missing.length) { show('Missing required fields: ' + missing.join(', '), true); return; }
 
-          var endpoint = isEdit ? ('/api/datasources/' + editingDatasourceId) : '/api/datasources';
-          var method = isEdit ? 'PUT' : 'POST';
+          var endpoint = isEdit ? ('/api/datasources/' + editingDatasourceId + '/update') : '/api/datasources';
+          var method = 'POST';
           requestJson(endpoint, {
             method: method,
             headers: { 'Content-Type': 'application/json' },

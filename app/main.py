@@ -50,6 +50,7 @@ def _sanitize_credentials(credentials: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _datasource_response(profile: Dict[str, Any]) -> Dict[str, Any]:
+    diagnostics = profile.get("diagnostics") or {}
     return {
         "id": profile.get("id"),
         "name": profile.get("name"),
@@ -59,6 +60,13 @@ def _datasource_response(profile: Dict[str, Any]) -> Dict[str, Any]:
         "created_at": profile.get("created_at"),
         "updated_at": profile.get("updated_at"),
         "credentials": _sanitize_credentials(profile.get("credentials", {})),
+        "diagnostics": {
+            "last_tested_at": diagnostics.get("last_tested_at"),
+            "last_test_status": diagnostics.get("last_test_status", "Not Tested"),
+            "last_test_stage": diagnostics.get("last_test_stage", ""),
+            "last_test_detail": diagnostics.get("last_test_detail", ""),
+            "last_test_hint": diagnostics.get("last_test_hint", ""),
+        },
     }
 
 
@@ -69,6 +77,170 @@ def _merged_credentials_for_update(existing: Dict[str, Any], incoming: Dict[str,
             continue
         merged[key] = value
     return merged
+
+
+def _test_datasource_connection(connection_type: str, credentials: Dict[str, Any]) -> Dict[str, Any]:
+    safe_context = _sanitize_credentials(credentials)
+    safe_context["connection_type"] = connection_type
+    try:
+        if connection_type == "mssql":
+            connector = MssqlConnector(credentials)
+            conn = connector._get_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                    cur.fetchone()
+            finally:
+                conn.close()
+        elif connection_type == "mysql":
+            connector = MysqlConnector(credentials)
+            conn = connector._get_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                    cur.fetchone()
+            finally:
+                conn.close()
+        elif connection_type == "redshift":
+            connector = RedshiftConnector(credentials)
+            with connector._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                    cur.fetchone()
+        elif connection_type == "salesforce":
+            connector = SalesforceConnector(credentials)
+            connector.get_object_metadata("Account")
+        else:
+            raise ValueError(f"Unsupported datasource type: {connection_type}")
+        return {
+            "ok": True,
+            "status": "Success",
+            "stage": "success",
+            "detail": "Connection validated successfully.",
+            "hint": "",
+        }
+    except Exception as exc:
+        detail = str(exc)
+        hint = _extract_hint(connection_type, detail)
+        logger.exception("Datasource connection test failed | context=%s", safe_context)
+        return {
+            "ok": False,
+            "status": "Failed",
+            "stage": "connection_test",
+            "detail": detail,
+            "hint": hint,
+        }
+
+
+def _resolve_mssql_server(credentials: Dict[str, Any]) -> str:
+    host = str(credentials.get("host", "")).strip()
+    port = credentials.get("port", 1433)
+    if "\\" in host or "," in host:
+        return host
+    if port in (None, "", 0):
+        return host
+    return f"{host},{port}"
+
+
+def _mssql_preflight(connection_type: str, credentials: Dict[str, Any]) -> Dict[str, Any]:
+    _ = connection_type
+    host = str(credentials.get("host", "")).strip()
+    auth_type = str(credentials.get("auth_type", "sql")).lower()
+    user = str(credentials.get("user", "")).strip()
+    password = str(credentials.get("password", "")).strip()
+    resolved_server = _resolve_mssql_server(credentials)
+    installed_drivers: list[str] = []
+    try:
+        import pyodbc
+
+        installed_drivers = [d for d in pyodbc.drivers() if "SQL Server" in d]
+    except Exception:
+        installed_drivers = []
+
+    checklist: list[Dict[str, str]] = []
+    checklist.append(
+        {
+            "status": "ok" if host else "action",
+            "item": "Host/instance provided",
+            "detail": host or "Set host (example: localhost\\SQLEXPRESS).",
+        }
+    )
+    checklist.append(
+        {
+            "status": "ok" if installed_drivers else "action",
+            "item": "SQL Server ODBC driver available",
+            "detail": ", ".join(installed_drivers) if installed_drivers else "Install ODBC Driver 17/18 for SQL Server.",
+        }
+    )
+    checklist.append(
+        {
+            "status": "ok",
+            "item": "Auth mode selected",
+            "detail": auth_type,
+        }
+    )
+    if auth_type == "sql":
+        checklist.append(
+            {
+                "status": "ok" if bool(user) else "action",
+                "item": "SQL username provided",
+                "detail": user or "Enter SQL user.",
+            }
+        )
+        checklist.append(
+            {
+                "status": "ok" if bool(password) else "action",
+                "item": "SQL password provided",
+                "detail": "Provided" if password else "Enter password to test.",
+            }
+        )
+
+    test_result = _test_datasource_connection("mssql", credentials)
+    return {
+        "preflight": {
+            "resolved_server": resolved_server,
+            "auth_type": auth_type,
+            "installed_sql_server_drivers": installed_drivers,
+        },
+        "checklist": checklist,
+        **test_result,
+    }
+
+
+def _preflight_datasource_connection(connection_type: str, credentials: Dict[str, Any]) -> Dict[str, Any]:
+    if connection_type == "mssql":
+        return _mssql_preflight(connection_type, credentials)
+    test_result = _test_datasource_connection(connection_type, credentials)
+    checklist = [
+        {"status": "ok" if credentials.get("host") else "action", "item": "Host provided", "detail": str(credentials.get("host") or "-")},
+        {"status": "ok", "item": "Connection type", "detail": connection_type},
+    ]
+    return {"preflight": {"connection_type": connection_type}, "checklist": checklist, **test_result}
+
+
+def _apply_datasource_update(datasource_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    existing = DATASOURCE_STORE.get(datasource_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail=f"Datasource '{datasource_id}' not found")
+
+    name = str(payload.get("name", existing.get("name", ""))).strip()
+    connection_type = str(payload.get("connection_type", existing.get("connection_type", ""))).strip().lower()
+    incoming_credentials = payload.get("credentials") or {}
+    owner_role = str(payload.get("owner_role", existing.get("owner_role", "all"))).strip().lower()
+    if not name or not connection_type or not isinstance(incoming_credentials, dict):
+        raise HTTPException(status_code=400, detail="name, connection_type, and credentials are required")
+
+    credentials = _merged_credentials_for_update(existing.get("credentials", {}), incoming_credentials)
+    updated = DATASOURCE_STORE.update(
+        datasource_id=datasource_id,
+        name=name,
+        connection_type=connection_type,
+        credentials=credentials,
+        owner_role=owner_role if owner_role in ("all", "admin", "user") else "all",
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Datasource '{datasource_id}' not found")
+    return _datasource_response(updated)
 
 
 def _session_user(request: Request):
@@ -545,28 +717,59 @@ async def create_datasource(request: Request):
 async def update_datasource(datasource_id: str, request: Request):
     _require_admin_user(request)
     payload = await request.json()
-    existing = DATASOURCE_STORE.get(datasource_id)
-    if not existing:
+    return _apply_datasource_update(datasource_id, payload)
+
+
+@app.post("/api/datasources/{datasource_id}/update")
+async def update_datasource_post(datasource_id: str, request: Request):
+    _require_admin_user(request)
+    payload = await request.json()
+    return _apply_datasource_update(datasource_id, payload)
+
+
+@app.post("/api/datasources/{datasource_id}/test")
+def test_datasource(datasource_id: str, request: Request):
+    _require_admin_user(request)
+    ds = DATASOURCE_STORE.get(datasource_id)
+    if not ds:
         raise HTTPException(status_code=404, detail=f"Datasource '{datasource_id}' not found")
-
-    name = str(payload.get("name", existing.get("name", ""))).strip()
-    connection_type = str(payload.get("connection_type", existing.get("connection_type", ""))).strip().lower()
-    incoming_credentials = payload.get("credentials") or {}
-    owner_role = str(payload.get("owner_role", existing.get("owner_role", "all"))).strip().lower()
-    if not name or not connection_type or not isinstance(incoming_credentials, dict):
-        raise HTTPException(status_code=400, detail="name, connection_type, and credentials are required")
-
-    credentials = _merged_credentials_for_update(existing.get("credentials", {}), incoming_credentials)
-    updated = DATASOURCE_STORE.update(
+    result = _test_datasource_connection(str(ds.get("connection_type", "")), dict(ds.get("credentials", {})))
+    DATASOURCE_STORE.update_diagnostics(
         datasource_id=datasource_id,
-        name=name,
-        connection_type=connection_type,
-        credentials=credentials,
-        owner_role=owner_role if owner_role in ("all", "admin", "user") else "all",
+        status=result.get("status", "Failed"),
+        stage=result.get("stage", ""),
+        detail=result.get("detail", ""),
+        hint=result.get("hint", ""),
     )
-    if not updated:
-        raise HTTPException(status_code=404, detail=f"Datasource '{datasource_id}' not found")
-    return _datasource_response(updated)
+    return {
+        "datasource_id": datasource_id,
+        "connection_type": ds.get("connection_type"),
+        **result,
+    }
+
+
+@app.post("/api/datasources/test/draft")
+async def test_draft_datasource(request: Request):
+    _require_admin_user(request)
+    payload = await request.json()
+    connection_type = str(payload.get("connection_type", "")).strip().lower()
+    credentials = payload.get("credentials") or {}
+    if not connection_type or not isinstance(credentials, dict):
+        raise HTTPException(status_code=400, detail="connection_type and credentials are required")
+    result = _test_datasource_connection(connection_type, dict(credentials))
+    return {"connection_type": connection_type, **result}
+
+
+@app.post("/api/diagnostics/datasource-preflight")
+async def datasource_preflight(request: Request):
+    _require_admin_user(request)
+    payload = await request.json()
+    connection_type = str(payload.get("connection_type", "")).strip().lower()
+    credentials = payload.get("credentials") or {}
+    if not connection_type or not isinstance(credentials, dict):
+        raise HTTPException(status_code=400, detail="connection_type and credentials are required")
+    result = _preflight_datasource_connection(connection_type, dict(credentials))
+    return {"connection_type": connection_type, **result}
 
 
 @app.delete("/api/datasources/{datasource_id}")

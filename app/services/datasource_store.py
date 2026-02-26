@@ -43,6 +43,7 @@ class DatasourceStore:
         created_by: str = "admin",
     ) -> Dict[str, Any]:
         rows = self._load()
+        now = datetime.utcnow().isoformat() + "Z"
         item = {
             "id": str(uuid4()),
             "name": name,
@@ -50,8 +51,15 @@ class DatasourceStore:
             "credentials": credentials,
             "owner_role": owner_role,
             "created_by": created_by,
-            "created_at": datetime.utcnow().isoformat() + "Z",
-            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "created_at": now,
+            "updated_at": now,
+            "diagnostics": {
+                "last_tested_at": None,
+                "last_test_status": "Not Tested",
+                "last_test_stage": "",
+                "last_test_detail": "",
+                "last_test_hint": "",
+            },
         }
         rows.append(item)
         self._save(rows)
@@ -83,6 +91,39 @@ class DatasourceStore:
             row["connection_type"] = connection_type
             row["credentials"] = credentials
             row["owner_role"] = owner_role
+            row["updated_at"] = now
+            updated_item = row
+            break
+        if not updated_item:
+            return None
+        self._save(rows)
+        return updated_item
+
+    def update_diagnostics(
+        self,
+        datasource_id: str,
+        status: str,
+        stage: str,
+        detail: str,
+        hint: str,
+    ) -> Optional[Dict[str, Any]]:
+        rows = self._load()
+        updated_item: Optional[Dict[str, Any]] = None
+        now = datetime.utcnow().isoformat() + "Z"
+        for row in rows:
+            if row.get("id") != datasource_id:
+                continue
+            diagnostics = row.get("diagnostics") or {}
+            diagnostics.update(
+                {
+                    "last_tested_at": now,
+                    "last_test_status": status,
+                    "last_test_stage": stage,
+                    "last_test_detail": detail,
+                    "last_test_hint": hint,
+                }
+            )
+            row["diagnostics"] = diagnostics
             row["updated_at"] = now
             updated_item = row
             break
