@@ -13,10 +13,14 @@
       .nav a.active, .nav a:hover { background: #1e3a8a; color: #fff; }
       .main { padding: 18px; }
       .card { background: #0f172a; border: 1px solid #1f2937; border-radius: 10px; padding: 14px; }
-      .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+      .filters { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto auto; gap: 10px; margin-bottom: 10px; align-items: end; }
       select { width: 100%; box-sizing: border-box; background: #111827; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; padding: 8px; }
       table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
       th, td { text-align: left; padding: 8px; border-bottom: 1px solid #1f2937; }
+      .btn { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+      .msg { color: #94a3b8; font-size: 0.85rem; margin-top: 6px; }
+      .status-success { color: #10b981; }
+      .status-failed { color: #ef4444; }
     </style>
   </head>
   <body>
@@ -38,20 +42,156 @@
         <div style="color:#94a3b8;margin-bottom:10px;">Track all system activities and user actions</div>
         <div class="card">
           <div class="filters">
-            <select><option>All Actions</option><option>Generate Mapping</option><option>Test Connection</option><option>Delete Connection</option></select>
-            <select><option>All Users</option><option>{{ username }}</option><option>Admin User</option></select>
+            <select id="action_filter"><option value="">All Actions</option></select>
+            <select id="actor_filter"><option value="">All Users</option></select>
+            <select id="status_filter"><option value="">All Statuses</option></select>
+            <select id="range_filter">
+              <option value="">All Time</option>
+              <option value="24h">Last 24 Hours</option>
+              <option value="7d">Last 7 Days</option>
+              <option value="30d">Last 30 Days</option>
+              <option value="custom">Custom Range</option>
+            </select>
+            <input id="from_ts" type="datetime-local" />
+            <input id="to_ts" type="datetime-local" />
+            <button id="export_btn" class="btn" type="button">Export CSV</button>
+            <button id="refresh_btn" class="btn" type="button">Refresh</button>
           </div>
           <table>
             <thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Details</th><th>Status</th></tr></thead>
-            <tbody>
-              <tr><td>2026-02-25 14:32:15</td><td>{{ username }}</td><td>Generate Mapping</td><td>Created mapping MAP-2456</td><td>Success</td></tr>
-              <tr><td>2026-02-25 14:15:22</td><td>Admin User</td><td>Test Connection</td><td>finance_db connection successful</td><td>Success</td></tr>
-              <tr><td>2026-02-25 13:40:03</td><td>Jane Doe</td><td>Export Results</td><td>Exported MAP-2455</td><td>Success</td></tr>
-              <tr><td>2026-02-25 10:50:15</td><td>Jane Doe</td><td>Delete Connection</td><td>Attempted delete of prod_db</td><td>Failed</td></tr>
-            </tbody>
+            <tbody id="audit_rows"></tbody>
           </table>
+          <div class="msg" id="audit_msg"></div>
         </div>
       </div>
     </div>
+    <script>
+      (function () {
+        var actionEl = document.getElementById('action_filter');
+        var actorEl = document.getElementById('actor_filter');
+        var statusEl = document.getElementById('status_filter');
+        var rangeEl = document.getElementById('range_filter');
+        var fromEl = document.getElementById('from_ts');
+        var toEl = document.getElementById('to_ts');
+        var rowsEl = document.getElementById('audit_rows');
+        var msgEl = document.getElementById('audit_msg');
+        var refreshBtn = document.getElementById('refresh_btn');
+        var exportBtn = document.getElementById('export_btn');
+
+        function fmtTs(value) {
+          var d = new Date(value || '');
+          if (Number.isNaN(d.getTime())) return '-';
+          return d.toISOString().replace('T', ' ').slice(0, 19);
+        }
+
+        function requestJson(url) {
+          return fetch(url).then(function (response) {
+            return response.text().then(function (text) {
+              var payload = {};
+              try { payload = text ? JSON.parse(text) : {}; } catch (e) { payload = {}; }
+              if (!response.ok) {
+                throw new Error((payload && payload.detail) || text || (response.status + ' ' + response.statusText));
+              }
+              return payload;
+            });
+          });
+        }
+
+        function fillSelect(el, values, placeholder, selected) {
+          var html = ['<option value="">' + placeholder + '</option>'];
+          (values || []).forEach(function (v) {
+            html.push('<option value="' + v + '"' + (selected === v ? ' selected' : '') + '>' + v + '</option>');
+          });
+          el.innerHTML = html.join('');
+        }
+
+        function rowHtml(r) {
+          var status = String(r.status || '');
+          var cls = status.toLowerCase() === 'success' ? 'status-success' : (status.toLowerCase() === 'failed' ? 'status-failed' : '');
+          return '<tr>' +
+            '<td>' + fmtTs(r.created_at) + '</td>' +
+            '<td>' + (r.actor || '-') + '</td>' +
+            '<td>' + (r.action || '-') + '</td>' +
+            '<td>' + (r.details || '-') + '</td>' +
+            '<td class="' + cls + '">' + (status || '-') + '</td>' +
+          '</tr>';
+        }
+
+        function loadLogs() {
+          var params = buildFilterParams();
+          params.push('limit=300');
+          var url = '/api/audit-logs?' + params.join('&');
+
+          requestJson(url)
+            .then(function (data) {
+              var logs = data.logs || [];
+              var f = data.filters || {};
+              fillSelect(actionEl, f.actions || [], 'All Actions', actionEl.value || '');
+              fillSelect(statusEl, f.statuses || [], 'All Statuses', statusEl.value || '');
+              fillSelect(actorEl, f.actors || [], (f.is_admin ? 'All Users' : 'Your User'), actorEl.value || '');
+              rowsEl.innerHTML = logs.map(rowHtml).join('');
+              if (!logs.length) rowsEl.innerHTML = '<tr><td colspan="5">No audit logs found.</td></tr>';
+              msgEl.textContent = 'Showing ' + logs.length + ' audit events.';
+            })
+            .catch(function (e) {
+              rowsEl.innerHTML = '';
+              msgEl.textContent = e.message || 'Failed to load audit logs.';
+            });
+        }
+
+        function toIsoIfAny(v) {
+          if (!v) return '';
+          try {
+            return new Date(v).toISOString();
+          } catch (e) {
+            return '';
+          }
+        }
+
+        function applyPresetRange() {
+          var preset = rangeEl.value;
+          if (!preset || preset === 'custom') return;
+          var now = new Date();
+          var from = new Date(now.getTime());
+          if (preset === '24h') from.setHours(from.getHours() - 24);
+          if (preset === '7d') from.setDate(from.getDate() - 7);
+          if (preset === '30d') from.setDate(from.getDate() - 30);
+          fromEl.value = from.toISOString().slice(0, 16);
+          toEl.value = now.toISOString().slice(0, 16);
+        }
+
+        function buildFilterParams() {
+          var params = [];
+          if (actionEl.value) params.push('action=' + encodeURIComponent(actionEl.value));
+          if (actorEl.value) params.push('actor=' + encodeURIComponent(actorEl.value));
+          if (statusEl.value) params.push('status=' + encodeURIComponent(statusEl.value));
+          var fromIso = toIsoIfAny(fromEl.value);
+          var toIso = toIsoIfAny(toEl.value);
+          if (fromIso) params.push('from_ts=' + encodeURIComponent(fromIso));
+          if (toIso) params.push('to_ts=' + encodeURIComponent(toIso));
+          return params;
+        }
+
+        actionEl.addEventListener('change', loadLogs);
+        actorEl.addEventListener('change', loadLogs);
+        statusEl.addEventListener('change', loadLogs);
+        rangeEl.addEventListener('change', function () { applyPresetRange(); loadLogs(); });
+        fromEl.addEventListener('change', function () {
+          if (rangeEl.value !== 'custom' && rangeEl.value !== '') rangeEl.value = 'custom';
+          loadLogs();
+        });
+        toEl.addEventListener('change', function () {
+          if (rangeEl.value !== 'custom' && rangeEl.value !== '') rangeEl.value = 'custom';
+          loadLogs();
+        });
+        refreshBtn.addEventListener('click', loadLogs);
+        exportBtn.addEventListener('click', function () {
+          var params = buildFilterParams();
+          params.push('limit=1000');
+          window.location.href = '/api/audit-logs/export?' + params.join('&');
+        });
+        loadLogs();
+      })();
+    </script>
   </body>
 </html>

@@ -62,6 +62,7 @@ This avoids conflicts with old app instances and reduces accidental network expo
 ## UI flow summary
 
 1. Open `/` and login (`admin/admin123` or `user/user123` in prototype).
+   - In non-dev setup (no seeded users), first create admin at `/setup/initial-admin`.
 2. You are redirected to `Dashboard`.
 3. Use left sidebar to navigate to:
    - `Mapping Workspace`

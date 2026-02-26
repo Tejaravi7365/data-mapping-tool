@@ -1,0 +1,255 @@
+[
+  {
+    "id": "ef49590e-b751-458e-bf3c-5ccf218014fa",
+    "created_at": "2026-02-26T21:00:48.772605Z",
+    "actor": "admin",
+    "action": "export_test",
+    "details": "csv export smoke",
+    "status": "Success",
+    "target": "",
+    "metadata": {}
+  },
+  {
+    "id": "5cfa7442-c68a-43d6-94d9-4b15d2b0fc5a",
+    "created_at": "2026-02-26T21:17:59.068765Z",
+    "actor": "admin",
+    "action": "login",
+    "details": "Login succeeded.",
+    "status": "Success",
+    "target": "admin",
+    "metadata": {}
+  },
+  {
+    "id": "59efcefc-0e07-44d4-917f-f982da52ef46",
+    "created_at": "2026-02-26T21:17:59.301053Z",
+    "actor": "admin",
+    "action": "create_user",
+    "details": "User 'qa_admin_f4be13cb' created with role 'admin'.",
+    "status": "Success",
+    "target": "qa_admin_f4be13cb",
+    "metadata": {}
+  },
+  {
+    "id": "cec83526-5d6d-446c-94af-52b78e086d0c",
+    "created_at": "2026-02-26T21:17:59.512621Z",
+    "actor": "qa_admin_f4be13cb",
+    "action": "login",
+    "details": "Login succeeded.",
+    "status": "Success",
+    "target": "qa_admin_f4be13cb",
+    "metadata": {}
+  },
+  {
+    "id": "a02624a8-0b76-44ae-8bd8-ddaf190ff716",
+    "created_at": "2026-02-26T21:17:59.610425Z",
+    "actor": "admin",
+    "action": "update_user",
+    "details": "User 'qa_admin_f4be13cb' updated (role=user, active=True).",
+    "status": "Success",
+    "target": "qa_admin_f4be13cb",
+    "metadata": {}
+  },
+  {
+    "id": "66e7b757-cb16-4cfb-b40a-7ac4451fff8d",
+    "created_at": "2026-02-26T21:17:59.868778Z",
+    "actor": "admin",
+    "action": "create_user",
+    "details": "User 'qa_user_f4be13cb' created with role 'user'.",
+    "status": "Success",
+    "target": "qa_user_f4be13cb",
+    "metadata": {}
+  },
+  {
+    "id": "61dbb8c9-2649-4ffe-932d-76db41d2520c",
+    "created_at": "2026-02-26T21:18:00.094144Z",
+    "actor": "qa_user_f4be13cb",
+    "action": "login",
+    "details": "Login succeeded.",
+    "status": "Success",
+    "target": "qa_user_f4be13cb",
+    "metadata": {}
+  },
+  {
+    "id": "7a585cf1-2098-4448-8b79-6c444324e6e7",
+    "created_at": "2026-02-26T21:18:00.281205Z",
+    "actor": "admin",
+    "action": "delete_user",
+    "details": "User 'qa_user_f4be13cb' deleted.",
+    "status": "Success",
+    "target": "qa_user_f4be13cb",
+    "metadata": {}
+  },
+  {
+    "id": "5706ac07-24b3-4b31-b4c4-9f2539e0c283",
+    "created_at": "2026-02-26T21:18:00.336759Z",
+    "actor": "admin",
+    "action": "delete_user",
+    "details": "User 'qa_admin_f4be13cb' deleted.",
+    "status": "Success",
+    "target": "qa_admin_f4be13cb",
+    "metadata": {}
+  },
+  {
+    "id": "07c76b0b-4315-422b-9d81-6c8f6bad4856",
+    "created_at": "2026-02-26T21:20:21.846191Z",
+    "actor": "admin",
+    "action": "login",
+    "details": "Login succeeded.",
+    "status": "Success",
+    "target": "admin",
+    "metadata": {}
+  },
+  {
+    "id": "177b9c91-2f5c-454b-8297-dbd7ae226106",
+    "created_at": "2026-02-26T21:21:08.515150Z",
+    "actor": "admin",
+    "action": "login",
+    "details": "Login succeeded.",
+    "status": "Success",
+    "target": "admin",
+    "metadata": {}
+  },
+  {
+    "id": "646f6c3e-d2a8-4312-b0ae-10f8d10c0911",
+    "created_at": "2026-02-26T21:21:08.607327Z",
+    "actor": "bootstrap_admin",
+    "action": "login",
+    "details": "Login failed.",
+    "status": "Failed",
+    "target": "bootstrap_admin",
+    "metadata": {}
+  },
+  {
+    "id": "5b552ae7-f7d4-4537-a23a-daf7eb101def",
+    "created_at": "2026-02-26T21:21:08.873958Z",
+    "actor": "admin",
+    "action": "create_user",
+    "details": "User 'qa_a_e8a43e' created with role 'admin'.",
+    "status": "Success",
+    "target": "qa_a_e8a43e",
+    "metadata": {}
+  },
+  {
+    "id": "66d84d08-be05-4cfa-923b-c54cb05873e5",
+    "created_at": "2026-02-26T21:21:09.106196Z",
+    "actor": "qa_a_e8a43e",
+    "action": "login",
+    "details": "Login succeeded.",
+    "status": "Success",
+    "target": "qa_a_e8a43e",
+    "metadata": {}
+  },
+  {
+    "id": "f99f2e67-642c-4994-be49-04b90b67ba9b",
+    "created_at": "2026-02-26T21:21:09.219815Z",
+    "actor": "admin",
+    "action": "update_user",
+    "details": "User 'qa_a_e8a43e' updated (role=user, active=True).",
+    "status": "Success",
+    "target": "qa_a_e8a43e",
+    "metadata": {}
+  },
+  {
+    "id": "f00f82f1-ffbb-4202-99a3-a0ef918209f0",
+    "created_at": "2026-02-26T21:21:09.452498Z",
+    "actor": "admin",
+    "action": "create_user",
+    "details": "User 'qa_u_e8a43e' created with role 'user'.",
+    "status": "Success",
+    "target": "qa_u_e8a43e",
+    "metadata": {}
+  },
+  {
+    "id": "387ae502-521e-4372-9527-af72597671f1",
+    "created_at": "2026-02-26T21:21:09.674570Z",
+    "actor": "qa_u_e8a43e",
+    "action": "login",
+    "details": "Login succeeded.",
+    "status": "Success",
+    "target": "qa_u_e8a43e",
+    "metadata": {}
+  },
+  {
+    "id": "96f84933-2dbe-47e9-bbae-b5d5a8437681",
+    "created_at": "2026-02-26T21:21:09.853621Z",
+    "actor": "admin",
+    "action": "delete_user",
+    "details": "User 'qa_u_e8a43e' deleted.",
+    "status": "Success",
+    "target": "qa_u_e8a43e",
+    "metadata": {}
+  },
+  {
+    "id": "59d31a43-18f5-4a1e-b781-ce147cf531f9",
+    "created_at": "2026-02-26T21:21:09.926389Z",
+    "actor": "admin",
+    "action": "delete_user",
+    "details": "User 'qa_a_e8a43e' deleted.",
+    "status": "Success",
+    "target": "qa_a_e8a43e",
+    "metadata": {}
+  },
+  {
+    "id": "da7ac7ef-3fa7-48ed-a535-48cf9033adc8",
+    "created_at": "2026-02-26T21:23:02.380142Z",
+    "actor": "admin",
+    "action": "login",
+    "details": "Login succeeded.",
+    "status": "Success",
+    "target": "admin",
+    "metadata": {}
+  },
+  {
+    "id": "a6c602b9-8dbc-4e8e-9cbd-81864db15365",
+    "created_at": "2026-02-26T21:24:03.346393Z",
+    "actor": "admin",
+    "action": "update_user",
+    "details": "User 'admin' updated (role=admin, active=True).",
+    "status": "Success",
+    "target": "admin",
+    "metadata": {}
+  },
+  {
+    "id": "7804a101-0571-488a-be2c-2f7f2ee06a1c",
+    "created_at": "2026-02-26T21:24:52.135607Z",
+    "actor": "admin",
+    "action": "create_user",
+    "details": "User 'Ravi' created with role 'admin'.",
+    "status": "Success",
+    "target": "Ravi",
+    "metadata": {}
+  },
+  {
+    "id": "b38ee3bc-c761-445b-aad6-c7e138b11d63",
+    "created_at": "2026-02-26T21:24:58.578491Z",
+    "actor": "admin",
+    "action": "logout",
+    "details": "User logged out.",
+    "status": "Success",
+    "target": "admin",
+    "metadata": {}
+  },
+  {
+    "id": "e6ab9cbe-4e21-4b1d-bf71-8730879c580d",
+    "created_at": "2026-02-26T21:25:16.167647Z",
+    "actor": "Ravi",
+    "action": "login",
+    "details": "Login succeeded.",
+    "status": "Success",
+    "target": "Ravi",
+    "metadata": {}
+  },
+  {
+    "id": "ba239ecd-0baf-43e8-955e-496aa62dffd4",
+    "created_at": "2026-02-26T21:27:24.505170Z",
+    "actor": "Ravi",
+    "action": "generate_mapping",
+    "details": "Mapping generated for 'mohansai_relatives' -> 'mohansai_donations'.",
+    "status": "Success",
+    "target": "",
+    "metadata": {
+      "source_type": "mssql",
+      "target_type": "mysql"
+    }
+  }
+]

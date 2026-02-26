@@ -1,12 +1,13 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
+import csv
 from typing import Any, Dict
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from io import BytesIO
+from io import BytesIO, StringIO
 
 from .models.metadata_models import (
     GenerateMappingRequest,
@@ -30,6 +31,7 @@ from .logging_utils import setup_logger
 from .services.datasource_store import DatasourceStore
 from .services.mapping_run_store import MappingRunStore
 from .services.user_store import UserStore
+from .services.audit_log_store import AuditLogStore
 
 
 app = FastAPI(title="Data Mapping Sheet Generator (Multi-Source → Multi-Target)")
@@ -39,6 +41,7 @@ APP_BUILD = "multi-source-v2"
 DATASOURCE_STORE = DatasourceStore()
 MAPPING_RUN_STORE = MappingRunStore()
 USER_STORE = UserStore()
+AUDIT_LOG_STORE = AuditLogStore()
 
 
 def _sanitize_credentials(credentials: Dict[str, Any]) -> Dict[str, Any]:
@@ -245,6 +248,76 @@ def _apply_datasource_update(datasource_id: str, payload: Dict[str, Any]) -> Dic
 
 def _session_user(request: Request):
     return USER_STORE.get_session_user(request.cookies.get("session_token"))
+
+
+def _audit_event(
+    actor: str,
+    action: str,
+    details: str,
+    status: str = "Success",
+    target: str = "",
+    metadata: Dict[str, Any] | None = None,
+) -> None:
+    try:
+        AUDIT_LOG_STORE.create(
+            actor=actor or "system",
+            action=action,
+            details=details,
+            status=status,
+            target=target,
+            metadata=metadata or {},
+        )
+    except Exception:
+        logger.exception("Failed to persist audit event | action=%s | actor=%s", action, actor)
+
+
+def _needs_initial_admin_setup() -> bool:
+    return not USER_STORE.has_users()
+
+
+def _password_policy_error(password: str) -> str:
+    if len(password) < 10:
+        return "Password must be at least 10 characters."
+    if not re.search(r"[A-Z]", password):
+        return "Password must include at least one uppercase letter."
+    if not re.search(r"[a-z]", password):
+        return "Password must include at least one lowercase letter."
+    if not re.search(r"[0-9]", password):
+        return "Password must include at least one number."
+    if not re.search(r"[^A-Za-z0-9]", password):
+        return "Password must include at least one special character."
+    return ""
+
+
+def _auth_redirect_response(request: Request, token: str, url: str = "/dashboard") -> RedirectResponse:
+    response = RedirectResponse(url=url, status_code=302)
+    response.set_cookie(
+        "session_token",
+        token,
+        httponly=True,
+        samesite="lax",
+        secure=(request.url.scheme == "https"),
+        max_age=USER_STORE.session_ttl_seconds,
+        path="/",
+    )
+    return response
+
+
+def _login_template_response(
+    request: Request,
+    error: str = "",
+    status_code: int = 200,
+):
+    return templates.TemplateResponse(
+        "login.html",
+        {
+            "request": request,
+            "app_build": APP_BUILD,
+            "error": error,
+            "show_default_users": USER_STORE.seed_defaults_enabled,
+        },
+        status_code=status_code,
+    )
 
 
 def _require_session_user(request: Request):
@@ -457,15 +530,19 @@ def ui_home(request: Request):
     """
     Simple HTML UI for selecting source/target and entering connection details.
     """
+    if _needs_initial_admin_setup():
+        return RedirectResponse(url="/setup/initial-admin", status_code=302)
     if not _session_user(request):
         return RedirectResponse(url="/login", status_code=302)
     return RedirectResponse(url="/dashboard", status_code=302)
 
 
-@app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
+@app.get("/setup/initial-admin", response_class=HTMLResponse)
+def initial_admin_setup_page(request: Request):
+    if not _needs_initial_admin_setup():
+        return RedirectResponse(url="/login", status_code=302)
     return templates.TemplateResponse(
-        "login.html",
+        "initial_admin_setup.html",
         {
             "request": request,
             "app_build": APP_BUILD,
@@ -474,38 +551,105 @@ def login_page(request: Request):
     )
 
 
+@app.post("/setup/initial-admin", response_class=HTMLResponse)
+async def initial_admin_setup_submit(request: Request):
+    if not _needs_initial_admin_setup():
+        return RedirectResponse(url="/login", status_code=302)
+    form = await request.form()
+    username = str(form.get("username", "")).strip()
+    password = str(form.get("password", ""))
+    confirm_password = str(form.get("confirm_password", ""))
+
+    if not username:
+        return templates.TemplateResponse(
+            "initial_admin_setup.html",
+            {"request": request, "app_build": APP_BUILD, "error": "Username is required."},
+            status_code=400,
+        )
+    if password != confirm_password:
+        return templates.TemplateResponse(
+            "initial_admin_setup.html",
+            {"request": request, "app_build": APP_BUILD, "error": "Password and confirmation do not match."},
+            status_code=400,
+        )
+    password_error = _password_policy_error(password)
+    if password_error:
+        return templates.TemplateResponse(
+            "initial_admin_setup.html",
+            {"request": request, "app_build": APP_BUILD, "error": password_error},
+            status_code=400,
+        )
+    try:
+        USER_STORE.create_user(username=username, password=password, role="admin")
+        _audit_event(
+            actor=username,
+            action="initial_admin_setup",
+            details="Initial admin account created.",
+            status="Success",
+            target=username,
+        )
+    except ValueError as exc:
+        return templates.TemplateResponse(
+            "initial_admin_setup.html",
+            {"request": request, "app_build": APP_BUILD, "error": str(exc)},
+            status_code=400,
+        )
+    token = USER_STORE.authenticate(username, password)
+    if not token:
+        return _login_template_response(
+            request,
+            error="Initial admin created. Please log in.",
+            status_code=200,
+        )
+    return _auth_redirect_response(request, token, url="/dashboard")
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    if _needs_initial_admin_setup():
+        return RedirectResponse(url="/setup/initial-admin", status_code=302)
+    return _login_template_response(request)
+
+
 @app.post("/login", response_class=HTMLResponse)
 async def login_submit(request: Request):
+    if _needs_initial_admin_setup():
+        return RedirectResponse(url="/setup/initial-admin", status_code=302)
     form = await request.form()
     username = str(form.get("username", "")).strip()
     password = str(form.get("password", ""))
     token = USER_STORE.authenticate(username, password)
     if not token:
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "app_build": APP_BUILD,
-                "error": "Invalid username or password",
-            },
-            status_code=401,
+        _audit_event(
+            actor=username or "anonymous",
+            action="login",
+            details="Login failed.",
+            status="Failed",
+            target=username,
         )
-    response = RedirectResponse(url="/dashboard", status_code=302)
-    response.set_cookie(
-        "session_token",
-        token,
-        httponly=True,
-        samesite="lax",
-        secure=(request.url.scheme == "https"),
-        max_age=USER_STORE.session_ttl_seconds,
-        path="/",
+        return _login_template_response(request, error="Invalid username or password", status_code=401)
+    _audit_event(
+        actor=username,
+        action="login",
+        details="Login succeeded.",
+        status="Success",
+        target=username,
     )
-    return response
+    return _auth_redirect_response(request, token, url="/dashboard")
 
 
 @app.get("/logout")
 def logout(request: Request):
+    session_user = _session_user(request)
     USER_STORE.logout(request.cookies.get("session_token"))
+    if session_user:
+        _audit_event(
+            actor=str(session_user.get("username", "unknown")),
+            action="logout",
+            details="User logged out.",
+            status="Success",
+            target=str(session_user.get("username", "")),
+        )
     response = RedirectResponse(url="/login", status_code=302)
     response.delete_cookie("session_token")
     return response
@@ -571,6 +715,7 @@ def settings_page(request: Request):
             "app_build": APP_BUILD,
             "user_role": user.get("role", "user"),
             "username": user.get("username", "user"),
+            "can_manage_users": user.get("role") == "admin",
         },
     )
 
@@ -654,15 +799,30 @@ def create_profile(payload: ConnectionProfileCreate, request: Request):
         created["connection_type"],
         created.get("owner_role", "all"),
     )
+    _audit_event(
+        actor=str(admin.get("username", "admin")),
+        action="create_profile",
+        details=f"Connection profile '{created.get('name', created['id'])}' created.",
+        status="Success",
+        target=str(created.get("id", "")),
+    )
     return _datasource_response(created)
 
 
 @app.delete("/api/profiles/{profile_id}")
 def delete_profile(profile_id: str, request: Request):
-    _require_admin_user(request)
+    admin = _require_admin_user(request)
+    profile = DATASOURCE_STORE.get(profile_id)
     deleted = DATASOURCE_STORE.delete(profile_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Profile '{profile_id}' not found")
+    _audit_event(
+        actor=str(admin.get("username", "admin")),
+        action="delete_profile",
+        details=f"Connection profile '{(profile or {}).get('name', profile_id)}' deleted.",
+        status="Success",
+        target=profile_id,
+    )
     return {"ok": True}
 
 
@@ -722,26 +882,50 @@ async def create_datasource(request: Request):
         owner_role=owner_role if owner_role in ("all", "admin", "user") else "all",
         created_by=admin.get("username", "admin"),
     )
+    _audit_event(
+        actor=str(admin.get("username", "admin")),
+        action="create_datasource",
+        details=f"Datasource '{name}' created.",
+        status="Success",
+        target=str(created.get("id", "")),
+        metadata={"connection_type": connection_type},
+    )
     return _datasource_response(created)
 
 
 @app.put("/api/datasources/{datasource_id}")
 async def update_datasource(datasource_id: str, request: Request):
-    _require_admin_user(request)
+    admin = _require_admin_user(request)
     payload = await request.json()
-    return _apply_datasource_update(datasource_id, payload)
+    updated = _apply_datasource_update(datasource_id, payload)
+    _audit_event(
+        actor=str(admin.get("username", "admin")),
+        action="update_datasource",
+        details=f"Datasource '{updated.get('name', datasource_id)}' updated.",
+        status="Success",
+        target=datasource_id,
+    )
+    return updated
 
 
 @app.post("/api/datasources/{datasource_id}/update")
 async def update_datasource_post(datasource_id: str, request: Request):
-    _require_admin_user(request)
+    admin = _require_admin_user(request)
     payload = await request.json()
-    return _apply_datasource_update(datasource_id, payload)
+    updated = _apply_datasource_update(datasource_id, payload)
+    _audit_event(
+        actor=str(admin.get("username", "admin")),
+        action="update_datasource",
+        details=f"Datasource '{updated.get('name', datasource_id)}' updated.",
+        status="Success",
+        target=datasource_id,
+    )
+    return updated
 
 
 @app.post("/api/datasources/{datasource_id}/test")
 def test_datasource(datasource_id: str, request: Request):
-    _require_admin_user(request)
+    admin = _require_admin_user(request)
     ds = DATASOURCE_STORE.get(datasource_id)
     if not ds:
         raise HTTPException(status_code=404, detail=f"Datasource '{datasource_id}' not found")
@@ -752,6 +936,17 @@ def test_datasource(datasource_id: str, request: Request):
         stage=result.get("stage", ""),
         detail=result.get("detail", ""),
         hint=result.get("hint", ""),
+    )
+    _audit_event(
+        actor=str(admin.get("username", "admin")),
+        action="test_datasource",
+        details=(
+            f"Datasource '{ds.get('name', datasource_id)}' test "
+            f"{'passed' if result.get('ok') else 'failed'}."
+        ),
+        status=result.get("status", "Failed"),
+        target=datasource_id,
+        metadata={"connection_type": ds.get("connection_type"), "stage": result.get("stage", "")},
     )
     return {
         "datasource_id": datasource_id,
@@ -786,10 +981,18 @@ async def datasource_preflight(request: Request):
 
 @app.delete("/api/datasources/{datasource_id}")
 def delete_datasource(datasource_id: str, request: Request):
-    _require_admin_user(request)
+    admin = _require_admin_user(request)
+    ds = DATASOURCE_STORE.get(datasource_id)
     deleted = DATASOURCE_STORE.delete(datasource_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Datasource '{datasource_id}' not found")
+    _audit_event(
+        actor=str(admin.get("username", "admin")),
+        action="delete_datasource",
+        details=f"Datasource '{(ds or {}).get('name', datasource_id)}' deleted.",
+        status="Success",
+        target=datasource_id,
+    )
     return {"ok": True}
 
 
@@ -981,6 +1184,94 @@ def mapping_runs(request: Request):
     return {"runs": rows}
 
 
+@app.get("/api/audit-logs")
+def audit_logs(
+    request: Request,
+    action: str | None = None,
+    actor: str | None = None,
+    status: str | None = None,
+    from_ts: str | None = None,
+    to_ts: str | None = None,
+    limit: int = 200,
+):
+    user = _require_session_user(request)
+    role = str(user.get("role", "user"))
+    actor_filter = actor if role == "admin" else str(user.get("username", ""))
+    logs = AUDIT_LOG_STORE.list_filtered(
+        actor=actor_filter,
+        action=action,
+        status=status,
+        from_ts=from_ts,
+        to_ts=to_ts,
+        limit=limit,
+    )
+    visible_pool = AUDIT_LOG_STORE.list_filtered(
+        actor=(None if role == "admin" else str(user.get("username", ""))),
+        from_ts=from_ts,
+        to_ts=to_ts,
+        limit=1000,
+    )
+    actor_values = sorted({str(r.get("actor", "")) for r in visible_pool if str(r.get("actor", ""))})
+    action_values = sorted({str(r.get("action", "")) for r in visible_pool if str(r.get("action", ""))})
+    status_values = sorted({str(r.get("status", "")) for r in visible_pool if str(r.get("status", ""))})
+    return {
+        "logs": logs,
+        "filters": {
+            "actors": actor_values if role == "admin" else [str(user.get("username", ""))],
+            "actions": action_values,
+            "statuses": status_values,
+            "is_admin": role == "admin",
+        },
+    }
+
+
+@app.get("/api/audit-logs/export")
+def export_audit_logs(
+    request: Request,
+    action: str | None = None,
+    actor: str | None = None,
+    status: str | None = None,
+    from_ts: str | None = None,
+    to_ts: str | None = None,
+    limit: int = 1000,
+):
+    user = _require_session_user(request)
+    role = str(user.get("role", "user"))
+    actor_filter = actor if role == "admin" else str(user.get("username", ""))
+    rows = AUDIT_LOG_STORE.list_filtered(
+        actor=actor_filter,
+        action=action,
+        status=status,
+        from_ts=from_ts,
+        to_ts=to_ts,
+        limit=limit,
+    )
+
+    buffer = StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["timestamp", "actor", "action", "details", "status", "target", "metadata_json"])
+    for r in rows:
+        writer.writerow(
+            [
+                str(r.get("created_at", "")),
+                str(r.get("actor", "")),
+                str(r.get("action", "")),
+                str(r.get("details", "")),
+                str(r.get("status", "")),
+                str(r.get("target", "")),
+                str(r.get("metadata", {})),
+            ]
+        )
+
+    csv_bytes = buffer.getvalue().encode("utf-8")
+    filename = f"audit_logs_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    return StreamingResponse(
+        BytesIO(csv_bytes),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.get("/api/admin/users")
 def list_users(request: Request):
     _require_admin_user(request)
@@ -989,18 +1280,146 @@ def list_users(request: Request):
 
 @app.post("/api/admin/users")
 async def create_user(request: Request):
-    _require_admin_user(request)
+    admin = _require_admin_user(request)
     payload = await request.json()
     username = str(payload.get("username", "")).strip()
     password = str(payload.get("password", ""))
     role = str(payload.get("role", "user")).strip().lower()
     if not username or not password or role not in ("admin", "user"):
         raise HTTPException(status_code=400, detail="username, password, and valid role are required")
+    password_error = _password_policy_error(password)
+    if password_error:
+        raise HTTPException(status_code=400, detail=password_error)
     try:
         user = USER_STORE.create_user(username=username, password=password, role=role)
+        logger.info(
+            "Admin action | actor=%s | action=create_user | target=%s | role=%s",
+            admin.get("username", "admin"),
+            username,
+            role,
+        )
+        _audit_event(
+            actor=str(admin.get("username", "admin")),
+            action="create_user",
+            details=f"User '{username}' created with role '{role}'.",
+            status="Success",
+            target=username,
+        )
         return user
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/admin/users/{username}")
+async def update_user(username: str, request: Request):
+    admin = _require_admin_user(request)
+    payload = await request.json()
+    role = payload.get("role")
+    active = payload.get("active")
+
+    if role is not None:
+        role = str(role).strip().lower()
+        if role not in ("admin", "user"):
+            raise HTTPException(status_code=400, detail="role must be 'admin' or 'user'")
+    if active is not None and not isinstance(active, bool):
+        raise HTTPException(status_code=400, detail="active must be boolean")
+
+    existing = USER_STORE.get_user(username)
+    if not existing:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    is_self = existing.get("username") == admin.get("username")
+    if existing.get("role") == "admin":
+        demoting = role == "user"
+        disabling = active is False
+        if (demoting or disabling) and USER_STORE.admin_count(active_only=True) <= 1:
+            raise HTTPException(status_code=400, detail="Cannot remove or disable the last active admin")
+    if is_self and active is False:
+        raise HTTPException(status_code=400, detail="You cannot disable your own account")
+
+    try:
+        updated = USER_STORE.update_user(username=username, role=role, active=active)
+        logger.info(
+            "Admin action | actor=%s | action=update_user | target=%s | role=%s | active=%s",
+            admin.get("username", "admin"),
+            username,
+            role if role is not None else existing.get("role"),
+            active if active is not None else existing.get("active", True),
+        )
+        _audit_event(
+            actor=str(admin.get("username", "admin")),
+            action="update_user",
+            details=(
+                f"User '{username}' updated "
+                f"(role={role if role is not None else existing.get('role')}, "
+                f"active={active if active is not None else existing.get('active', True)})."
+            ),
+            status="Success",
+            target=username,
+        )
+        return updated
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/admin/users/{username}/reset-password")
+async def reset_user_password(username: str, request: Request):
+    admin = _require_admin_user(request)
+    payload = await request.json()
+    new_password = str(payload.get("new_password", ""))
+    if not new_password:
+        raise HTTPException(status_code=400, detail="new_password is required")
+    password_error = _password_policy_error(new_password)
+    if password_error:
+        raise HTTPException(status_code=400, detail=password_error)
+    existing = USER_STORE.get_user(username)
+    if not existing:
+        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        updated = USER_STORE.reset_password(username=username, new_password=new_password)
+        logger.info(
+            "Admin action | actor=%s | action=reset_password | target=%s",
+            admin.get("username", "admin"),
+            username,
+        )
+        _audit_event(
+            actor=str(admin.get("username", "admin")),
+            action="reset_password",
+            details=f"Password reset for user '{username}'.",
+            status="Success",
+            target=username,
+        )
+        return updated
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.delete("/api/admin/users/{username}")
+def delete_user(username: str, request: Request):
+    admin = _require_admin_user(request)
+    existing = USER_STORE.get_user(username)
+    if not existing:
+        raise HTTPException(status_code=404, detail="User not found")
+    if existing.get("username") == admin.get("username"):
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+    if existing.get("role") == "admin" and USER_STORE.admin_count(active_only=True) <= 1:
+        raise HTTPException(status_code=400, detail="Cannot delete the last active admin")
+    deleted = USER_STORE.delete_user(username)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="User not found")
+    logger.info(
+        "Admin action | actor=%s | action=delete_user | target=%s",
+        admin.get("username", "admin"),
+        username,
+    )
+    _audit_event(
+        actor=str(admin.get("username", "admin")),
+        action="delete_user",
+        details=f"User '{username}' deleted.",
+        status="Success",
+        target=username,
+    )
+    return {"ok": True}
 
 
 def _resolved_credentials(
@@ -1205,6 +1624,16 @@ def generate_mapping(request: GenerateMappingRequest, http_request: Request):
         session_user = _session_user(http_request)
         username = (session_user or {}).get("username", "system")
         _record_mapping_run(request, username, mapping_df, status="Completed")
+        _audit_event(
+            actor=str(username),
+            action="generate_mapping",
+            details=f"Mapping generated for '{request.source_object}' -> '{request.target_table}'.",
+            status="Success",
+            metadata={
+                "source_type": request.source_type.value,
+                "target_type": request.target_type.value,
+            },
+        )
 
         excel_generator = ExcelGenerator()
         excel_bytes = excel_generator.to_excel_bytes(mapping_df)
@@ -1229,6 +1658,17 @@ def generate_mapping(request: GenerateMappingRequest, http_request: Request):
             request.target_type,
             request.source_object,
             request.target_table,
+        )
+        session_user = _session_user(http_request)
+        _audit_event(
+            actor=str((session_user or {}).get("username", "system")),
+            action="generate_mapping",
+            details=f"Mapping generation failed: {exc}",
+            status="Failed",
+            metadata={
+                "source_type": request.source_type.value,
+                "target_type": request.target_type.value,
+            },
         )
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -1284,6 +1724,17 @@ async def ui_generate_mapping(request: Request):
         filename = _mapping_filename(gen_request.source_object, gen_request.target_table)
         desktop_path = _save_excel_to_desktop(excel_bytes, filename)
         logger.info("UI mapping generation succeeded | desktop_path=%s", desktop_path)
+        _audit_event(
+            actor=str(username),
+            action="generate_mapping_ui",
+            details=f"UI mapping generated for '{gen_request.source_object}' -> '{gen_request.target_table}'.",
+            status="Success",
+            metadata={
+                "source_type": gen_request.source_type.value,
+                "target_type": gen_request.target_type.value,
+                "desktop_path": desktop_path,
+            },
+        )
 
         buffer = BytesIO(excel_bytes)
         return StreamingResponse(
@@ -1300,5 +1751,12 @@ async def ui_generate_mapping(request: Request):
         raise
     except Exception as exc:  # noqa: BLE001
         logger.exception("UI mapping generation failed")
+        session_user = _session_user(request)
+        _audit_event(
+            actor=str((session_user or {}).get("username", "system")),
+            action="generate_mapping_ui",
+            details=f"UI mapping generation failed: {exc}",
+            status="Failed",
+        )
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

@@ -21,6 +21,11 @@
       table { width: 100%; border-collapse: collapse; }
       th, td { text-align: left; padding: 8px; border-bottom: 1px solid #1f2937; font-size: 0.88rem; }
       .btn { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
+      .msg { font-size: 0.85rem; margin-top: 8px; }
+      .msg.ok { color: #93c5fd; }
+      .msg.err { color: #fca5a5; }
+      .mini { background: #334155; color: #fff; border: 0; border-radius: 6px; padding: 6px 8px; cursor: pointer; margin-right: 6px; }
+      .mini.danger { background: #b91c1c; }
     </style>
   </head>
   <body>
@@ -80,7 +85,181 @@
           </table>
           <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button class="btn" type="button">Save Settings</button></div>
         </div>
+
+        {% if can_manage_users %}
+        <div class="card">
+          <h4>User Management (Admin)</h4>
+          <div class="row">
+            <div>
+              <label>Username</label>
+              <input id="new_username" placeholder="e.g. data_analyst" />
+            </div>
+            <div>
+              <label>Role</label>
+              <select id="new_role">
+                <option value="user">user</option>
+                <option value="admin">admin</option>
+              </select>
+            </div>
+          </div>
+          <label style="margin-top:8px;">Temporary Password</label>
+          <input id="new_password" type="password" placeholder="Min 10 chars with upper/lower/number/special" />
+          <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+            <button class="btn" id="create_user_btn" type="button">Create User</button>
+          </div>
+          <div id="users_msg" class="msg ok"></div>
+
+          <table style="margin-top:10px;">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Active</th>
+                <th>Last Login</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users_tbody"></tbody>
+          </table>
+        </div>
+        {% endif %}
       </div>
     </div>
+    {% if can_manage_users %}
+    <script>
+      (function () {
+        var msgEl = document.getElementById('users_msg');
+        var tbody = document.getElementById('users_tbody');
+        var currentUsername = "{{ username }}";
+
+        function show(msg, isErr) {
+          msgEl.textContent = msg || '';
+          msgEl.className = 'msg ' + (isErr ? 'err' : 'ok');
+        }
+
+        function requestJson(url, options) {
+          return fetch(url, options).then(function (response) {
+            return response.text().then(function (text) {
+              var payload = {};
+              try { payload = text ? JSON.parse(text) : {}; } catch (e) { payload = {}; }
+              if (!response.ok) {
+                throw new Error((payload && payload.detail) || text || (response.status + ' ' + response.statusText));
+              }
+              return payload;
+            });
+          });
+        }
+
+        function fmt(ts) {
+          if (!ts) return '-';
+          var d = new Date(ts);
+          if (Number.isNaN(d.getTime())) return '-';
+          return d.toISOString().replace('T', ' ').slice(0, 16);
+        }
+
+        function rowHtml(u) {
+          var username = u.username || '';
+          var role = u.role || 'user';
+          var active = !!u.active;
+          return '<tr data-user="' + username + '">' +
+            '<td>' + username + (username === currentUsername ? ' (you)' : '') + '</td>' +
+            '<td><select data-role="' + username + '">' +
+              '<option value="user"' + (role === 'user' ? ' selected' : '') + '>user</option>' +
+              '<option value="admin"' + (role === 'admin' ? ' selected' : '') + '>admin</option>' +
+            '</select></td>' +
+            '<td><select data-active="' + username + '">' +
+              '<option value="true"' + (active ? ' selected' : '') + '>true</option>' +
+              '<option value="false"' + (!active ? ' selected' : '') + '>false</option>' +
+            '</select></td>' +
+            '<td>' + fmt(u.last_login_at) + '</td>' +
+            '<td>' +
+              '<button class="mini" data-save="' + username + '">Save</button>' +
+              '<button class="mini" data-reset="' + username + '">Reset Password</button>' +
+              '<button class="mini danger" data-delete="' + username + '">Delete</button>' +
+            '</td>' +
+          '</tr>';
+        }
+
+        function bindRowActions() {
+          tbody.querySelectorAll('button[data-save]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var user = btn.getAttribute('data-save');
+              var roleEl = tbody.querySelector('select[data-role="' + user + '"]');
+              var activeEl = tbody.querySelector('select[data-active="' + user + '"]');
+              requestJson('/api/admin/users/' + encodeURIComponent(user), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  role: roleEl ? roleEl.value : 'user',
+                  active: activeEl ? activeEl.value === 'true' : true
+                })
+              })
+                .then(function () { show('Updated user: ' + user); loadUsers(); })
+                .catch(function (e) { show(e.message || 'Update failed', true); });
+            });
+          });
+
+          tbody.querySelectorAll('button[data-reset]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var user = btn.getAttribute('data-reset');
+              var pwd = window.prompt('Enter new password for ' + user + ':');
+              if (!pwd) return;
+              requestJson('/api/admin/users/' + encodeURIComponent(user) + '/reset-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ new_password: pwd })
+              })
+                .then(function () { show('Password reset for: ' + user); })
+                .catch(function (e) { show(e.message || 'Password reset failed', true); });
+            });
+          });
+
+          tbody.querySelectorAll('button[data-delete]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var user = btn.getAttribute('data-delete');
+              if (!window.confirm('Delete user ' + user + '?')) return;
+              requestJson('/api/admin/users/' + encodeURIComponent(user), { method: 'DELETE' })
+                .then(function () { show('Deleted user: ' + user); loadUsers(); })
+                .catch(function (e) { show(e.message || 'Delete failed', true); });
+            });
+          });
+        }
+
+        function loadUsers() {
+          requestJson('/api/admin/users')
+            .then(function (data) {
+              var users = (data && data.users) || [];
+              tbody.innerHTML = users.map(rowHtml).join('');
+              bindRowActions();
+            })
+            .catch(function (e) { show(e.message || 'Failed to load users', true); });
+        }
+
+        document.getElementById('create_user_btn').addEventListener('click', function () {
+          var username = (document.getElementById('new_username').value || '').trim();
+          var role = document.getElementById('new_role').value || 'user';
+          var password = document.getElementById('new_password').value || '';
+          if (!username || !password) {
+            show('Username and temporary password are required.', true);
+            return;
+          }
+          requestJson('/api/admin/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, password: password, role: role })
+          })
+            .then(function () {
+              document.getElementById('new_username').value = '';
+              document.getElementById('new_password').value = '';
+              show('User created successfully.');
+              loadUsers();
+            })
+            .catch(function (e) { show(e.message || 'Create user failed', true); });
+        });
+
+        loadUsers();
+      })();
+    </script>
+    {% endif %}
   </body>
 </html>

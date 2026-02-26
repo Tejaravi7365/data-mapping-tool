@@ -91,10 +91,13 @@ Open:
 - API docs: `http://127.0.0.1:8101/docs`
 - Version health: `http://127.0.0.1:8101/health/version`
 
-Login defaults (prototype):
+Login behavior:
 
-- `admin / admin123`
-- `user / user123`
+- In dev/local mode (default), demo users are auto-seeded:
+  - `admin / admin123`
+  - `user / user123`
+- In non-dev mode (`APP_ENV` not `dev`/`local`), no users are seeded.
+  - First login redirects to `/setup/initial-admin` for one-time admin bootstrap.
 
 Demo tip:
 
@@ -210,8 +213,13 @@ Implementation direction:
 - `GET /api/datasources/{datasource_id}/tables`
 - `GET /api/dashboard/metrics`
 - `GET /api/mapping-runs`
+- `GET /api/audit-logs`
+- `GET /api/audit-logs/export`
 - `GET /api/admin/users`
 - `POST /api/admin/users`
+- `PUT /api/admin/users/{username}`
+- `POST /api/admin/users/{username}/reset-password`
+- `DELETE /api/admin/users/{username}`
 - `POST /generate-mapping`
 - `POST /ui/generate-mapping`
 - `GET /health/version`

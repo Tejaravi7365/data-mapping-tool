@@ -33,3 +33,15 @@ pyodbc.InterfaceError: ('28000', "[28000] [Microsoft][ODBC Driver 17 for SQL Ser
 2026-02-25 21:44:58,538 | INFO | data_mapping_app | Testing MySQL connection | context={'host': 'localhost', 'port': 3306, 'database': 'mysql', 'user': 'root', 'password': '***', 'schema': None}
 2026-02-25 21:51:19,611 | INFO | data_mapping_app | Testing MSSQL connection | context={'host': 'localhost\\SQLEXPRESS', 'port': 1433, 'database': None, 'user': 'Admin_test', 'password': '***', 'schema': 'dbo', 'auth_type': <MssqlAuthType.sql: 'sql'>, 'driver': None, 'resolved_server': 'localhost\\SQLEXPRESS'}
 2026-02-25 21:51:19,869 | INFO | data_mapping_app | Testing MySQL connection | context={'host': 'localhost', 'port': 3306, 'database': None, 'user': 'root', 'password': '***', 'schema': None}
+2026-02-26 15:17:59,284 | INFO | data_mapping_app | Admin action | actor=admin | action=create_user | target=qa_admin_f4be13cb | role=admin
+2026-02-26 15:17:59,594 | INFO | data_mapping_app | Admin action | actor=admin | action=update_user | target=qa_admin_f4be13cb | role=user | active=True
+2026-02-26 15:17:59,830 | INFO | data_mapping_app | Admin action | actor=admin | action=create_user | target=qa_user_f4be13cb | role=user
+2026-02-26 15:18:00,278 | INFO | data_mapping_app | Admin action | actor=admin | action=delete_user | target=qa_user_f4be13cb
+2026-02-26 15:18:00,313 | INFO | data_mapping_app | Admin action | actor=admin | action=delete_user | target=qa_admin_f4be13cb
+2026-02-26 15:21:08,835 | INFO | data_mapping_app | Admin action | actor=admin | action=create_user | target=qa_a_e8a43e | role=admin
+2026-02-26 15:21:09,204 | INFO | data_mapping_app | Admin action | actor=admin | action=update_user | target=qa_a_e8a43e | role=user | active=True
+2026-02-26 15:21:09,412 | INFO | data_mapping_app | Admin action | actor=admin | action=create_user | target=qa_u_e8a43e | role=user
+2026-02-26 15:21:09,851 | INFO | data_mapping_app | Admin action | actor=admin | action=delete_user | target=qa_u_e8a43e
+2026-02-26 15:21:09,891 | INFO | data_mapping_app | Admin action | actor=admin | action=delete_user | target=qa_a_e8a43e
+2026-02-26 15:24:03,339 | INFO | data_mapping_app | Admin action | actor=admin | action=update_user | target=admin | role=admin | active=True
+2026-02-26 15:24:52,135 | INFO | data_mapping_app | Admin action | actor=admin | action=create_user | target=Ravi | role=admin

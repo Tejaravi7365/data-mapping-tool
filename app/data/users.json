@@ -3,12 +3,24 @@
     "username": "admin",
     "password_hash": "pbkdf2_sha256$310000$9c1da1cb9479b7494a3827893d05ee0a$c32774a5028b7c73f16215a1e83d62da6340cc99efb5ac644523305483c1fa37",
     "role": "admin",
-    "created_at": "2026-02-26T00:47:53.915098Z"
+    "created_at": "2026-02-26T00:47:53.915098Z",
+    "last_login_at": "2026-02-26T21:23:02.359469Z",
+    "updated_at": "2026-02-26T21:24:03.337479Z",
+    "active": true
   },
   {
     "username": "user",
     "password_hash": "e606e38b0d8c19b24cf0ee3808183162ea7cd63ff7912dbb22b5e803286b4446",
     "role": "user",
     "created_at": "2026-02-26T00:47:53.915098Z"
+  },
+  {
+    "username": "Ravi",
+    "password_hash": "pbkdf2_sha256$310000$e3105b1dfb20288b0204e55240cd2a51$17d7c70a5721942b2541ffd3f1efe179a8569c9d71662c5bf584244f0d135941",
+    "role": "admin",
+    "active": true,
+    "created_at": "2026-02-26T21:24:51.869950Z",
+    "updated_at": "2026-02-26T21:25:16.104991Z",
+    "last_login_at": "2026-02-26T21:25:16.104991Z"
   }
 ]

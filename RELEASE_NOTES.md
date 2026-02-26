@@ -17,6 +17,34 @@
 
 ### Backend/API Updates
 
+- Added persistent audit event store:
+  - `app/services/audit_log_store.py`
+  - `app/data/audit_logs.json`
+- Added live audit API:
+  - `GET /api/audit-logs` with role-aware filtering (`action`, `actor`, `status`, `limit`)
+  - Added date-range filtering (`from_ts`, `to_ts`)
+  - Added CSV export endpoint: `GET /api/audit-logs/export`
+- Wired audit events for key actions:
+  - login/logout
+  - initial admin bootstrap
+  - user admin lifecycle (create/update/reset/delete)
+  - datasource/profile create/update/test/delete
+  - mapping generation (API + UI success/failure)
+- Added admin user lifecycle endpoints:
+  - `PUT /api/admin/users/{username}` (update role/active)
+  - `POST /api/admin/users/{username}/reset-password`
+  - `DELETE /api/admin/users/{username}`
+- Added safeguards:
+  - Cannot disable/delete/demote the last active admin
+  - Admin cannot disable or delete their own account
+  - Disabling/deleting/resetting a user revokes active sessions for that user
+- Added one-time initial admin bootstrap flow:
+  - `GET /setup/initial-admin`
+  - `POST /setup/initial-admin`
+  - Login/home now redirect to setup when no users exist.
+- User seeding behavior is now environment-aware:
+  - Dev/local: demo users auto-seeded
+  - Non-dev: no default users; admin must be created during bootstrap
 - Credential model update:
   - `database` is now optional for `mssql`, `mysql`, and `redshift` credential payloads.
 - Legacy profile APIs now require admin session:
@@ -54,6 +82,14 @@
 
 ### UI Changes
 
+- `Audit Logs`:
+  - Replaced static table with live data from `/api/audit-logs`
+  - Added filters for action/user/status
+  - Added quick date presets (24h/7d/30d) and custom from/to range
+  - Added filtered CSV export and refresh
+- `Settings`:
+  - Added Admin User Management panel
+  - Create users, update role/active status, reset passwords, and delete users
 - `Database Connections`:
   - Dynamic typed credential fields by connector type (`mssql`, `mysql`, `redshift`, `salesforce`)
   - Discovery actions for databases/schemas before datasource creation
