@@ -1,1 +1,32 @@
-[]
+[
+  {
+    "id": "d3af1bdf-3f8f-4a37-84d6-e0264383d86e",
+    "name": "localhost_MSSQL",
+    "connection_type": "mssql",
+    "credentials": {
+      "host": "localhost\\SQLEXPRESS",
+      "auth_type": "sql",
+      "user": "Admin_test",
+      "password": "Ravi@143"
+    },
+    "owner_role": "all",
+    "created_by": "admin",
+    "created_at": "2026-02-26T02:33:07.368060Z",
+    "updated_at": "2026-02-26T02:33:07.368060Z"
+  },
+  {
+    "id": "9632ac83-788a-48c3-8bfe-3921994363c9",
+    "name": "Mysql",
+    "connection_type": "mysql",
+    "credentials": {
+      "host": "localhost",
+      "port": 3306,
+      "user": "root",
+      "password": "Ravi@143"
+    },
+    "owner_role": "all",
+    "created_by": "admin",
+    "created_at": "2026-02-26T03:33:07.583023Z",
+    "updated_at": "2026-02-26T03:33:07.583023Z"
+  }
+]
