@@ -7,12 +7,20 @@
       "host": "localhost\\SQLEXPRESS",
       "auth_type": "sql",
       "user": "Admin_test",
-      "password": "Ravi@143"
+      "password": "Ravi@143",
+      "port": 1433
     },
     "owner_role": "all",
     "created_by": "admin",
     "created_at": "2026-02-26T02:33:07.368060Z",
-    "updated_at": "2026-02-26T02:33:07.368060Z"
+    "updated_at": "2026-02-26T04:28:00.314349Z",
+    "diagnostics": {
+      "last_tested_at": "2026-02-26T04:28:00.314349Z",
+      "last_test_status": "Success",
+      "last_test_stage": "success",
+      "last_test_detail": "Connection validated successfully.",
+      "last_test_hint": ""
+    }
   },
   {
     "id": "9632ac83-788a-48c3-8bfe-3921994363c9",
@@ -27,6 +35,13 @@
     "owner_role": "all",
     "created_by": "admin",
     "created_at": "2026-02-26T03:33:07.583023Z",
-    "updated_at": "2026-02-26T03:33:07.583023Z"
+    "updated_at": "2026-02-26T04:28:21.540081Z",
+    "diagnostics": {
+      "last_tested_at": "2026-02-26T04:28:21.540081Z",
+      "last_test_status": "Success",
+      "last_test_stage": "success",
+      "last_test_detail": "Connection validated successfully.",
+      "last_test_hint": ""
+    }
   }
 ]

@@ -1,1 +1,21 @@
-[]
+[
+  {
+    "run_id": "MAP-2451",
+    "created_at": "2026-02-26T04:29:12.921650Z",
+    "created_by": "admin",
+    "source_type": "mysql",
+    "target_type": "mssql",
+    "source_datasource_id": "9632ac83-788a-48c3-8bfe-3921994363c9",
+    "target_datasource_id": "d3af1bdf-3f8f-4a37-84d6-e0264383d86e",
+    "source_datasource_name": "Mysql",
+    "target_datasource_name": "localhost_MSSQL",
+    "source_database": "myrelatives",
+    "target_database": "SQLlearning",
+    "source_object": "mohansai_relatives",
+    "target_table": "mohansai_relatives",
+    "total_fields": 6,
+    "matched_fields": 0,
+    "status": "Completed",
+    "updated_at": "2026-02-26T04:29:12.921650Z"
+  }
+]
