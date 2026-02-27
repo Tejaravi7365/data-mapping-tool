@@ -23,6 +23,7 @@ Supported platforms:
 Outcome: 
 <img width="1110" height="166" alt="image" src="https://github.com/user-attachments/assets/d04ef07b-f0b4-44d0-b714-4526b1d3b65d" />
 
+Prototype: https://pulp-cherry-08033101.figma.site/
 
 The UI now includes a Figma-style multi-page shell:
 
