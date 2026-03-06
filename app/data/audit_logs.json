@@ -251,5 +251,68 @@
       "source_type": "mssql",
       "target_type": "mysql"
     }
+  },
+  {
+    "id": "d00336ca-3bd8-408f-b26f-85c1c55d973c",
+    "created_at": "2026-03-02T18:23:50.305469Z",
+    "actor": "Ravi",
+    "action": "login",
+    "details": "Login failed.",
+    "status": "Failed",
+    "target": "Ravi",
+    "metadata": {}
+  },
+  {
+    "id": "d5384b33-607c-4e08-8902-1b29a0c90e4f",
+    "created_at": "2026-03-02T18:24:07.914367Z",
+    "actor": "Ravi",
+    "action": "login",
+    "details": "Login succeeded.",
+    "status": "Success",
+    "target": "Ravi",
+    "metadata": {}
+  },
+  {
+    "id": "eae5fd23-6ce4-478a-8a96-34b3f9ea3dc0",
+    "created_at": "2026-03-05T13:32:41.110738Z",
+    "actor": "Ravi",
+    "action": "login",
+    "details": "Login succeeded.",
+    "status": "Success",
+    "target": "Ravi",
+    "metadata": {}
+  },
+  {
+    "id": "366ed65c-d78d-4335-bc82-16a417ab746b",
+    "created_at": "2026-03-05T16:40:10.391058Z",
+    "actor": "Ravi",
+    "action": "generate_mapping",
+    "details": "Mapping generated for 'mohansai_relatives' -> 'mohansai_relatives'.",
+    "status": "Success",
+    "target": "",
+    "metadata": {
+      "source_type": "mssql",
+      "target_type": "mysql"
+    }
+  },
+  {
+    "id": "83c750e3-30bf-4d21-a35d-64b6b6406d36",
+    "created_at": "2026-03-06T15:00:30.761970Z",
+    "actor": "Ravi",
+    "action": "login",
+    "details": "Login succeeded.",
+    "status": "Success",
+    "target": "Ravi",
+    "metadata": {}
+  },
+  {
+    "id": "863d8e22-6c62-47b1-b001-570b0e3c0765",
+    "created_at": "2026-03-06T16:22:11.102184Z",
+    "actor": "Ravi",
+    "action": "logout",
+    "details": "User logged out.",
+    "status": "Success",
+    "target": "Ravi",
+    "metadata": {}
   }
 ]
