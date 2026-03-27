@@ -14,7 +14,12 @@ class RedshiftConnector:
         self._credentials = credentials
 
     def _get_connection(self):
-        database = self._credentials.get("database") or "dev"
+        database = str(self._credentials.get("database") or "").strip()
+        if not database:
+            raise ValueError(
+                "Redshift database is required for connection and discovery. "
+                "Set credentials.database (or select a database first)."
+            )
         return psycopg2.connect(
             host=self._credentials["host"],
             port=self._credentials.get("port", 5439),

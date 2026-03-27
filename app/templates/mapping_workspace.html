@@ -28,6 +28,7 @@
       .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
       .checks label { margin: 0; display: flex; gap: 8px; align-items: center; font-size: 0.85rem; }
       .small { color: #94a3b8; font-size: 0.8rem; }
+      .hidden { display: none; }
     </style>
   </head>
   <body>
@@ -108,8 +109,23 @@
         <div class="card">
           <h4>Mapping Strategy Mode</h4>
           <div class="checks">
-            <label><input type="radio" name="mode" checked /> One-to-One Table Mapping</label>
-            <label><input type="radio" name="mode" /> Bulk Multi-table Auto Mapping (next)</label>
+            <label><input type="radio" name="mode" value="single" id="mode_single" checked /> One-to-One Table Mapping</label>
+            <label><input type="radio" name="mode" value="bulk" id="mode_bulk" /> Bulk Multi-table Mapping</label>
+          </div>
+          <div id="bulk_panel" class="hidden" style="margin-top:10px;">
+            <div class="row" style="grid-template-columns: 1fr 1fr;">
+              <div>
+                <label>Source Tables (one per line)</label>
+                <textarea id="source_tables_bulk" placeholder="customer_master_src&#10;account_src"></textarea>
+              </div>
+              <div>
+                <label>Target Tables (one per line)</label>
+                <textarea id="target_tables_bulk" placeholder="customer_master_tgt&#10;account_tgt"></textarea>
+              </div>
+            </div>
+            <div class="small" style="margin-top:8px;">
+              Use equal number of source and target tables in the same order. Output will be a single zip with one Excel per pair.
+            </div>
           </div>
           <div class="actions">
             <button class="btn" id="generate_btn" type="button">Generate Mapping</button>
@@ -130,6 +146,11 @@
         var targetTable = document.getElementById('target_table');
         var sourceList = document.getElementById('source_table_list');
         var targetList = document.getElementById('target_table_list');
+        var modeSingle = document.getElementById('mode_single');
+        var modeBulk = document.getElementById('mode_bulk');
+        var bulkPanel = document.getElementById('bulk_panel');
+        var sourceTablesBulk = document.getElementById('source_tables_bulk');
+        var targetTablesBulk = document.getElementById('target_tables_bulk');
         var statusEl = document.getElementById('status');
         var generateBtn = document.getElementById('generate_btn');
         var datasourceMap = {};
@@ -241,6 +262,17 @@
           return id && datasourceMap[id] ? datasourceMap[id].connection_type : '';
         }
 
+        function parseBulkTables(text) {
+          return (text || '')
+            .split(/\r?\n/)
+            .map(function (x) { return x.trim(); })
+            .filter(function (x) { return !!x; });
+        }
+
+        function updateModeUi() {
+          bulkPanel.classList.toggle('hidden', !modeBulk.checked);
+        }
+
         function loadDatasources() {
           requestJson('/api/datasources')
             .then(function (d) {
@@ -288,11 +320,11 @@
 
         generateBtn.addEventListener('click', function () {
           setStatus('');
-          if (!sourceDs.value || !targetDs.value || !sourceTable.value.trim() || !targetTable.value.trim()) {
-            setStatus('Select source/target datasources and tables first.', true);
+          if (!sourceDs.value || !targetDs.value) {
+            setStatus('Select source and target datasources first.', true);
             return;
           }
-          var payload = {
+          var basePayload = {
             source_type: selectedType(sourceDs),
             target_type: selectedType(targetDs),
             source_datasource_id: sourceDs.value,
@@ -301,13 +333,41 @@
             target_database: targetDatabase.value || null,
             source_schema: sourceSchema.value || null,
             target_schema: targetSchema.value || null,
-            source_object: sourceTable.value.trim(),
-            target_table: targetTable.value.trim(),
             preview: false
           };
+
+          var endpoint = '/generate-mapping';
+          var payload = null;
+          if (modeBulk.checked) {
+            var sourceObjects = parseBulkTables(sourceTablesBulk.value);
+            var targetTables = parseBulkTables(targetTablesBulk.value);
+            if (!sourceObjects.length || !targetTables.length) {
+              setStatus('Enter source and target tables for bulk mapping.', true);
+              return;
+            }
+            if (sourceObjects.length !== targetTables.length) {
+              setStatus('Bulk mapping requires same number of source and target tables.', true);
+              return;
+            }
+            endpoint = '/generate-mapping/batch';
+            payload = Object.assign({}, basePayload, {
+              source_objects: sourceObjects,
+              target_tables: targetTables
+            });
+          } else {
+            if (!sourceTable.value.trim() || !targetTable.value.trim()) {
+              setStatus('Select source/target tables first.', true);
+              return;
+            }
+            payload = Object.assign({}, basePayload, {
+              source_object: sourceTable.value.trim(),
+              target_table: targetTable.value.trim()
+            });
+          }
+
           generateBtn.disabled = true;
           setStatus('Generating mapping...');
-          fetch('/generate-mapping', {
+          fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -331,13 +391,16 @@
                 a.click();
                 a.remove();
                 URL.revokeObjectURL(u);
-                setStatus('Mapping generated successfully.');
+                setStatus(modeBulk.checked ? 'Batch mapping generated successfully.' : 'Mapping generated successfully.');
               });
             })
             .catch(function (e) { setStatus(e.message || 'Generate failed', true); })
             .finally(function () { generateBtn.disabled = false; });
         });
 
+        modeSingle.addEventListener('change', updateModeUi);
+        modeBulk.addEventListener('change', updateModeUi);
+        updateModeUi();
         loadDatasources();
       })();
     </script>

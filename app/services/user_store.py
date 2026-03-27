@@ -286,6 +286,77 @@ class UserStore:
         self._revoke_sessions_for_username(username)
         return True
 
+    def upsert_sso_user(self, username: str, role: str = "user") -> Dict[str, Any]:
+        normalized = (username or "").strip()
+        if not normalized:
+            raise ValueError("username is required")
+        rows = self._load()
+        now = datetime.utcnow().isoformat() + "Z"
+        for user in rows:
+            if str(user.get("username", "")).strip().lower() != normalized.lower():
+                continue
+            if "active" not in user:
+                user["active"] = True
+            user["updated_at"] = now
+            self._save(rows)
+            return {
+                "username": user.get("username"),
+                "role": user.get("role", "user"),
+                "active": bool(user.get("active", True)),
+                "created_at": user.get("created_at"),
+                "updated_at": user.get("updated_at"),
+                "last_login_at": user.get("last_login_at"),
+            }
+
+        item = {
+            "username": normalized,
+            # Random local hash; SSO users authenticate via IdP.
+            "password_hash": self._hash_password(secrets.token_urlsafe(32)),
+            "role": role if role in ("admin", "user") else "user",
+            "active": True,
+            "created_at": now,
+            "updated_at": now,
+            "last_login_at": None,
+        }
+        rows.append(item)
+        self._save(rows)
+        return {
+            "username": item["username"],
+            "role": item["role"],
+            "active": True,
+            "created_at": item["created_at"],
+            "updated_at": item["updated_at"],
+            "last_login_at": item["last_login_at"],
+        }
+
+    def create_session_for_user(self, username: str) -> Optional[str]:
+        self._prune_expired_sessions()
+        rows = self._load()
+        now = datetime.utcnow().isoformat() + "Z"
+        target: Optional[Dict[str, Any]] = None
+        for row in rows:
+            if str(row.get("username", "")).strip().lower() != str(username).strip().lower():
+                continue
+            if not bool(row.get("active", True)):
+                return None
+            row["last_login_at"] = now
+            row["updated_at"] = now
+            target = row
+            break
+        if not target:
+            return None
+        self._save(rows)
+        issued_at = datetime.utcnow()
+        expires_at = issued_at + timedelta(seconds=self._SESSION_TTL_SECONDS)
+        token = secrets.token_urlsafe(32)
+        self._sessions[token] = {
+            "username": target.get("username"),
+            "role": target.get("role"),
+            "issued_at": issued_at.isoformat() + "Z",
+            "expires_at": expires_at.isoformat() + "Z",
+        }
+        return token
+
     def authenticate(self, username: str, password: str) -> Optional[str]:
         self._prune_expired_sessions()
         for user in self._load():
@@ -310,16 +381,7 @@ class UserStore:
                         row["active"] = True
                     break
             self._save(rows)
-            issued_at = datetime.utcnow()
-            expires_at = issued_at + timedelta(seconds=self._SESSION_TTL_SECONDS)
-            token = secrets.token_urlsafe(32)
-            self._sessions[token] = {
-                "username": user.get("username"),
-                "role": user.get("role"),
-                "issued_at": issued_at.isoformat() + "Z",
-                "expires_at": expires_at.isoformat() + "Z",
-            }
-            return token
+            return self.create_session_for_user(str(user.get("username", "")))
         return None
 
     def get_session_user(self, token: str | None) -> Optional[Dict[str, Any]]:

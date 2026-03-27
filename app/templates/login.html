@@ -41,6 +41,18 @@
         color: white;
         cursor: pointer;
       }
+      .btn-secondary {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        text-align: center;
+        padding: 10px;
+        border-radius: 8px;
+        background: #334155;
+        color: #e5e7eb;
+        text-decoration: none;
+        margin-top: 8px;
+      }
       .error {
         color: #fca5a5;
         font-size: 0.85rem;
@@ -64,6 +76,9 @@
         <input type="password" name="password" placeholder="Password" required />
         <button type="submit">Login</button>
       </form>
+      {% if show_sso_login %}
+      <a class="btn-secondary" href="/auth/sso/login">Login with {{ sso_provider|upper }}</a>
+      {% endif %}
       <div class="hint">
         Build: {{ app_build }}<br />
         {% if show_default_users %}

@@ -294,3 +294,8 @@ For deployment/governance review meetings, use:
 
 - `docs/review-pack/00_REVIEW_PACK_INDEX.md`
 
+For Angular transition work:
+
+- `docs/ANGULAR_TRANSITION_PLAN.md`
+- `docs/ANGULAR_AUTH_AUDIT_STARTER.md`
+
