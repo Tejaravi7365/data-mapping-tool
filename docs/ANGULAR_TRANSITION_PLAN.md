@@ -18,6 +18,8 @@ Move from server-rendered templates to Angular frontend while preserving current
   - `POST /api/auth/login`
   - `POST /api/auth/logout`
   - `GET /api/auth/me`
+- Add SSO status endpoint for frontend feature toggles:
+  - `GET /api/auth/sso/status`
 - Enable CORS for Angular local dev (`localhost:4200`)
 - Keep existing routes/templates unchanged for backward compatibility
 
@@ -53,6 +55,9 @@ Each page should use existing backend APIs without changing business logic.
   - `POST /api/auth/login`
   - `POST /api/auth/logout`
   - `GET /api/auth/me`
+  - `GET /api/auth/sso/status`
+  - `GET /auth/sso/login`
+  - `GET /auth/sso/callback`
 - Datasource:
   - `GET /api/datasources`
   - `POST /api/datasources`
@@ -75,6 +80,9 @@ Each page should use existing backend APIs without changing business logic.
 - Audit:
   - `GET /api/audit-logs`
   - `GET /api/audit-logs/export`
+- Admin SSO settings:
+  - `GET /api/admin/sso-settings`
+  - `PUT /api/admin/sso-settings`
 
 ## Recommended Angular Module Structure
 

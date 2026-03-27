@@ -82,6 +82,9 @@ export class AuditLogsService {
 
 - `GET /api/admin/sso-settings`
 - `PUT /api/admin/sso-settings`
+- `GET /api/auth/sso/status`
+- `GET /auth/sso/login`
+- `GET /auth/sso/callback`
 
 Payload shape:
 
@@ -132,4 +135,4 @@ export const routes: Routes = [
 
 - Use backend SSO settings as admin-configurable source of truth.
 - In production, move `client_secret` to secrets manager and store only reference IDs.
-- Add backend OIDC authorize/callback endpoints in the next step to complete IdP login flow.
+- OIDC authorize/callback endpoints are implemented in backend; Angular can use `/api/auth/sso/status` to show/hide an SSO login option and redirect to `/auth/sso/login`.

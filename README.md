@@ -49,6 +49,7 @@ The UI now includes a Figma-style multi-page shell:
 - Metadata-driven mapping for Salesforce/MSSQL/MySQL/Redshift
 - Type and name-based match logic
 - Excel export (`.xlsx`) with source/target table names in filename
+- Batch mapping export (`.zip`) for multi-table pairs
 - Connection testing endpoints for all supported connectors
 - Parameter-based datasource creation UI (no raw JSON input required)
 - Datasource APIs (create/list/delete + discover databases/schemas)
@@ -216,12 +217,21 @@ Implementation direction:
 - `GET /api/mapping-runs`
 - `GET /api/audit-logs`
 - `GET /api/audit-logs/export`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `GET /api/auth/sso/status`
+- `GET /auth/sso/login`
+- `GET /auth/sso/callback`
 - `GET /api/admin/users`
 - `POST /api/admin/users`
 - `PUT /api/admin/users/{username}`
 - `POST /api/admin/users/{username}/reset-password`
 - `DELETE /api/admin/users/{username}`
+- `GET /api/admin/sso-settings`
+- `PUT /api/admin/sso-settings`
 - `POST /generate-mapping`
+- `POST /generate-mapping/batch`
 - `POST /ui/generate-mapping`
 - `GET /health/version`
 - `GET /security/notes`
@@ -234,6 +244,7 @@ Notes:
 
 - `database` is optional when creating or testing datasources for `mssql`, `mysql`, and `redshift`.
 - This supports server-level onboarding first, then selecting default database/schema after discovery.
+- For Redshift discovery and metadata retrieval, `database` must be selected/provided before connection calls.
 
 Example create datasource:
 
@@ -282,7 +293,19 @@ POST /api/datasources/discover
 - Passwords are stored using salted PBKDF2-HMAC-SHA256 hashes.
 - Legacy unsalted SHA-256 password hashes are upgraded on successful login.
 - Legacy `/api/profiles*` endpoints are now admin-protected.
+- Batch mapping endpoint requires authenticated session.
 - Datasource credentials are still JSON-backed for prototype use; migrate to a secrets manager before production.
+
+## SSO (Okta-style OIDC)
+
+- Admin can configure SSO from `Settings` (provider, issuer URL, client ID/secret, redirect URI, scopes).
+- Endpoints:
+  - `GET /api/admin/sso-settings`
+  - `PUT /api/admin/sso-settings`
+  - `GET /auth/sso/login`
+  - `GET /auth/sso/callback`
+  - `GET /api/auth/sso/status`
+- New SSO users can be auto-provisioned with default `user` role.
 
 ## Security
 

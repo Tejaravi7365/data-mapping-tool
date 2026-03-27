@@ -73,6 +73,7 @@ This avoids conflicts with old app instances and reduces accidental network expo
 4. In `Mapping Workspace`, select source datasource + database + schema + table.
 5. Select target datasource + database + schema + table.
 6. Click `Generate Mapping`.
+7. For multi-table mappings, select `Bulk Multi-table Mapping` and provide source/target table lists (one per line) to download a zip output.
 
 On success:
 
@@ -129,11 +130,21 @@ Datasource credential note:
 
 - For `mssql`, `mysql`, and `redshift`, `credentials.database` is optional during create/test.
 - This allows server-level discovery first (`/api/datasources/discover`, `/databases`, `/schemas`) and default database/schema selection later.
+- For Redshift metadata/discovery operations, provide/select a `database` first; missing database now returns explicit validation error.
 
 You can view live operational data via:
 
 - `GET /api/dashboard/metrics`
 - `GET /api/mapping-runs`
+
+Auth + SSO APIs for Angular/SPA:
+
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `GET /api/auth/sso/status`
+- `GET /auth/sso/login`
+- `GET /auth/sso/callback`
 
 ## Optional: access from other devices
 
