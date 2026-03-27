@@ -104,16 +104,20 @@ Current implementation note:
 
 Current behavior:
 - Session cookie based login (`/login`) with prototype roles (`admin`, `user`).
+- JSON auth APIs are available for SPA clients (`/api/auth/login`, `/api/auth/logout`, `/api/auth/me`).
 - Session cookies are HTTP-only, TTL-bound, and marked `secure` under HTTPS.
 - Server-side sessions enforce expiration.
 - Password storage uses salted PBKDF2-HMAC-SHA256 hashes.
 - Legacy SHA-256 hashes are auto-migrated to PBKDF2 on successful login.
 - Admin-gated management APIs/pages cover datasource, user, and legacy profile operations.
+- Batch mapping endpoint requires authenticated session.
+- Admin-managed SSO settings and OIDC login/callback routes are available (Okta-compatible issuer endpoints).
 
 Recommended controls:
 - Use signed/rotated session secrets with persistent backing store (for multi-instance hosting).
 - Integrate enterprise identity (SSO/OIDC) instead of local user file.
 - Add audit event persistence for admin actions.
+- Move OIDC client secret from local JSON storage to managed secrets vault before production.
 
 ## Operational Best Practices
 

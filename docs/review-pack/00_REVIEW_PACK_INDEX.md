@@ -14,6 +14,8 @@ This pack is designed for security reviewers, infrastructure teams, and supervis
    - Risk matrix with impact, likelihood, owner, and mitigation
 5. `05_GO_LIVE_CHECKLIST.md`
    - End-to-end readiness and sign-off checklist
+6. `06_WHAT_CHANGED_ONE_PAGER.md`
+   - Stakeholder summary of recent user/admin/security changes
 
 ## Suggested Review Sequence
 

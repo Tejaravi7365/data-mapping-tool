@@ -1,5 +1,58 @@
 # Release Notes
 
+## 2026-02-26
+
+### Highlights
+
+- Added backend-first Angular transition support with JSON auth APIs and CORS for local Angular dev.
+- Added admin-managed SSO configuration (Okta-style OIDC settings) and OIDC login/callback flow.
+- Improved fuzzy/type matching quality and fixed security/validation gaps in mapping and Redshift connectivity.
+
+### Backend/API Updates
+
+- Added SPA auth APIs:
+  - `POST /api/auth/login`
+  - `POST /api/auth/logout`
+  - `GET /api/auth/me`
+- Added SSO status and OIDC routes:
+  - `GET /api/auth/sso/status`
+  - `GET /auth/sso/login`
+  - `GET /auth/sso/callback`
+- Added admin SSO settings APIs:
+  - `GET /api/admin/sso-settings`
+  - `PUT /api/admin/sso-settings`
+- Added SSO settings persistence:
+  - `app/services/sso_settings_store.py`
+  - `app/data/sso_settings.json`
+- Added SSO user/session support in user store:
+  - SSO upsert user and direct session creation helpers
+- Security fix:
+  - `/generate-mapping/batch` now requires authenticated session (`_require_session_user`)
+- Redshift connector behavior change:
+  - Removed implicit fallback to `dev` database
+  - Explicit validation error when database is missing
+- Mapping engine fixes:
+  - Separated source-type mapping from target-type normalization for comparison
+  - Tightened fuzzy acceptance logic to prevent token-overlap-only false positives
+
+### UI Changes
+
+- `Settings`:
+  - Added admin SSO configuration section (issuer/client/scopes/redirect/enable toggle)
+- `Login`:
+  - Shows `Login with <Provider>` button when SSO is enabled
+- `Mapping Workspace`:
+  - Bulk mode generates zip output from multiple source/target table pairs
+
+### Documentation Updates
+
+- Updated:
+  - `README.md`
+  - `SETUP_GUIDE.md`
+  - `SECURITY_CONSIDERATIONS.md`
+  - `docs/ANGULAR_TRANSITION_PLAN.md`
+  - `docs/ANGULAR_AUTH_AUDIT_STARTER.md`
+
 ## 2026-02-25
 
 ### Highlights
