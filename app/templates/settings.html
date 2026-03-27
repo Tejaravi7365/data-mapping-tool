@@ -123,6 +123,54 @@
           </table>
         </div>
         {% endif %}
+
+        {% if can_manage_sso %}
+        <div class="card">
+          <h4>SSO Configuration (Admin)</h4>
+          <div class="small" style="margin-bottom:8px;">Configure OpenID Connect provider settings (example: Okta).</div>
+          <div class="row">
+            <div>
+              <label>Enable SSO</label>
+              <select id="sso_enabled">
+                <option value="false">false</option>
+                <option value="true">true</option>
+              </select>
+            </div>
+            <div>
+              <label>Provider</label>
+              <select id="sso_provider">
+                <option value="okta">okta</option>
+              </select>
+            </div>
+          </div>
+          <div class="row" style="margin-top:8px;">
+            <div>
+              <label>Issuer URL</label>
+              <input id="sso_issuer_url" placeholder="https://dev-xxxxxx.okta.com/oauth2/default" />
+            </div>
+            <div>
+              <label>Client ID</label>
+              <input id="sso_client_id" placeholder="Okta OIDC client id" />
+            </div>
+          </div>
+          <div class="row" style="margin-top:8px;">
+            <div>
+              <label>Client Secret</label>
+              <input id="sso_client_secret" type="password" placeholder="Leave blank to keep existing secret" />
+            </div>
+            <div>
+              <label>Redirect URI</label>
+              <input id="sso_redirect_uri" placeholder="https://mapping.college.edu/auth/callback" />
+            </div>
+          </div>
+          <label style="margin-top:8px;">Scopes</label>
+          <input id="sso_scopes" placeholder="openid profile email" />
+          <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+            <button class="btn" id="save_sso_btn" type="button">Save SSO Settings</button>
+          </div>
+          <div id="sso_msg" class="msg ok"></div>
+        </div>
+        {% endif %}
       </div>
     </div>
     {% if can_manage_users %}
@@ -258,6 +306,79 @@
         });
 
         loadUsers();
+      })();
+    </script>
+    {% endif %}
+    {% if can_manage_sso %}
+    <script>
+      (function () {
+        var msgEl = document.getElementById('sso_msg');
+        var enabledEl = document.getElementById('sso_enabled');
+        var providerEl = document.getElementById('sso_provider');
+        var issuerEl = document.getElementById('sso_issuer_url');
+        var clientIdEl = document.getElementById('sso_client_id');
+        var clientSecretEl = document.getElementById('sso_client_secret');
+        var redirectEl = document.getElementById('sso_redirect_uri');
+        var scopesEl = document.getElementById('sso_scopes');
+        var saveBtn = document.getElementById('save_sso_btn');
+
+        function show(msg, isErr) {
+          msgEl.textContent = msg || '';
+          msgEl.className = 'msg ' + (isErr ? 'err' : 'ok');
+        }
+
+        function requestJson(url, options) {
+          return fetch(url, options).then(function (response) {
+            return response.text().then(function (text) {
+              var payload = {};
+              try { payload = text ? JSON.parse(text) : {}; } catch (e) { payload = {}; }
+              if (!response.ok) {
+                throw new Error((payload && payload.detail) || text || (response.status + ' ' + response.statusText));
+              }
+              return payload;
+            });
+          });
+        }
+
+        function loadSso() {
+          requestJson('/api/admin/sso-settings')
+            .then(function (data) {
+              var s = (data && data.settings) || {};
+              enabledEl.value = String(!!s.enabled);
+              providerEl.value = s.provider || 'okta';
+              issuerEl.value = s.issuer_url || '';
+              clientIdEl.value = s.client_id || '';
+              clientSecretEl.value = '';
+              redirectEl.value = s.redirect_uri || '';
+              scopesEl.value = s.scopes || 'openid profile email';
+            })
+            .catch(function (e) { show(e.message || 'Failed to load SSO settings', true); });
+        }
+
+        saveBtn.addEventListener('click', function () {
+          var payload = {
+            enabled: enabledEl.value === 'true',
+            provider: providerEl.value || 'okta',
+            issuer_url: (issuerEl.value || '').trim(),
+            client_id: (clientIdEl.value || '').trim(),
+            redirect_uri: (redirectEl.value || '').trim(),
+            scopes: (scopesEl.value || '').trim() || 'openid profile email'
+          };
+          var secret = (clientSecretEl.value || '').trim();
+          if (secret) payload.client_secret = secret;
+          requestJson('/api/admin/sso-settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+            .then(function () {
+              clientSecretEl.value = '';
+              show('SSO settings saved.');
+            })
+            .catch(function (e) { show(e.message || 'Failed to save SSO settings', true); });
+        });
+
+        loadSso();
       })();
     </script>
     {% endif %}

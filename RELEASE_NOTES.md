@@ -17,6 +17,12 @@
 
 ### Backend/API Updates
 
+- Added batch mapping API:
+  - `POST /generate-mapping/batch` (returns zip with one Excel per table pair)
+- Improved fuzzy matching behavior:
+  - Better handling for common prefixes (`cust_`, `customer_`, etc.)
+  - Reduced false-positive fuzzy suggestions
+  - Improved type comparison normalization for aliases (e.g., `int` vs `integer`)
 - Added persistent audit event store:
   - `app/services/audit_log_store.py`
   - `app/data/audit_logs.json`
@@ -87,6 +93,10 @@
   - Added filters for action/user/status
   - Added quick date presets (24h/7d/30d) and custom from/to range
   - Added filtered CSV export and refresh
+- `Mapping Workspace`:
+  - Enabled bulk multi-table mapping mode
+  - Added source/target multi-table input areas (line-based pairs)
+  - Bulk output now downloads as a zip archive
 - `Settings`:
   - Added Admin User Management panel
   - Create users, update role/active status, reset passwords, and delete users

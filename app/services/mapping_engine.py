@@ -1,4 +1,5 @@
 from difflib import SequenceMatcher
+import re
 from typing import Dict
 
 import pandas as pd
@@ -46,13 +47,61 @@ class MappingEngine:
         "ntext": "varchar",
         "image": "varchar",
     }
-    FUZZY_MATCH_THRESHOLD = 0.78
+    FUZZY_MATCH_THRESHOLD = 0.72
+    COMMON_PREFIX_TOKENS = {
+        "src",
+        "source",
+        "tgt",
+        "target",
+        "tbl",
+        "table",
+        "col",
+        "column",
+        "cust",
+        "customer",
+    }
+    TARGET_TYPE_NORMALIZATION: Dict[str, str] = {
+        # Common SQL/warehouse aliases seen on target systems.
+        "int": "integer",
+        "character varying": "varchar",
+        "double precision": "float",
+        "bool": "boolean",
+    }
 
     def _normalize_name(self, name: str) -> str:
         return name.strip().lower()
 
     def _normalize_for_similarity(self, name: str) -> str:
         return "".join(ch for ch in self._normalize_name(name) if ch.isalnum())
+
+    def _tokenize_name(self, name: str) -> list[str]:
+        return [t for t in re.split(r"[^a-z0-9]+", self._normalize_name(name)) if t]
+
+    def _core_tokens(self, name: str) -> list[str]:
+        tokens = self._tokenize_name(name)
+        return [t for t in tokens if t not in self.COMMON_PREFIX_TOKENS]
+
+    def _is_fuzzy_candidate_acceptable(self, source_field: str, target_field: str, score: float) -> bool:
+        src_core = self._core_tokens(source_field)
+        tgt_core = self._core_tokens(target_field)
+        src_set = set(src_core)
+        tgt_set = set(tgt_core)
+        if src_set and tgt_set:
+            shared_tokens = src_set & tgt_set
+            overlap_ratio = len(shared_tokens) / max(len(src_set), len(tgt_set))
+            if overlap_ratio >= 0.5:
+                # Token overlap is useful, but never enough on its own.
+                # Require fuzzy quality as well; single-token overlaps like 'id'
+                # need a stronger score to avoid false positives.
+                min_required = self.FUZZY_MATCH_THRESHOLD
+                if len(shared_tokens) == 1:
+                    min_required = self.FUZZY_MATCH_THRESHOLD + 0.1
+                return score >= min_required
+        src_norm = self._normalize_for_similarity(source_field)
+        tgt_norm = self._normalize_for_similarity(target_field)
+        if src_norm and tgt_norm and (src_norm in tgt_norm or tgt_norm in src_norm):
+            return score >= (self.FUZZY_MATCH_THRESHOLD - 0.04)
+        return score >= (self.FUZZY_MATCH_THRESHOLD + 0.05)
 
     def _best_fuzzy_target_key(self, source_field: str, candidate_target_keys):
         """
@@ -77,6 +126,14 @@ class MappingEngine:
     def _map_source_type_to_target(self, source_type: str) -> str:
         """Map source data type to expected target type (SQL-like)."""
         return self.TYPE_MAPPING.get(source_type.lower(), source_type.lower())
+
+    def _normalize_target_type_for_compare(self, target_type: str) -> str:
+        """
+        Normalize target-side type labels only for comparison.
+        This does not apply source-to-target semantic mapping.
+        """
+        text = str(target_type or "").strip().lower()
+        return self.TARGET_TYPE_NORMALIZATION.get(text, text)
 
     def generate_mapping(
         self,
@@ -132,7 +189,11 @@ class MappingEngine:
             else:
                 candidate_keys = [k for k in target_by_col.keys() if k not in matched_target_keys]
                 fuzzy_key, fuzzy_score = self._best_fuzzy_target_key(src_field, candidate_keys)
-                if fuzzy_key is not None and fuzzy_score >= self.FUZZY_MATCH_THRESHOLD:
+                if (
+                    fuzzy_key is not None
+                    and fuzzy_score >= self.FUZZY_MATCH_THRESHOLD
+                    and self._is_fuzzy_candidate_acceptable(src_field, fuzzy_key, fuzzy_score)
+                ):
                     tgt_row = target_by_col.get(fuzzy_key)
                     if tgt_row is not None:
                         matched_target_keys.add(fuzzy_key)
@@ -160,8 +221,9 @@ class MappingEngine:
             target_type = tgt_row.get("data_type", "")
             target_length = tgt_row.get("length")
             expected_type = self._map_source_type_to_target(src_type)
+            normalized_target_type = self._normalize_target_type_for_compare(str(target_type))
 
-            has_type_mismatch = target_type.lower() != expected_type.lower()
+            has_type_mismatch = normalized_target_type.lower() != expected_type.lower()
             has_length_mismatch = (
                 src_length is not None
                 and target_length is not None

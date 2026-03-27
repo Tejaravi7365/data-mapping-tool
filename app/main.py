@@ -2,12 +2,17 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
 import csv
+import zipfile
+import secrets
+from urllib.parse import urlencode
 from typing import Any, Dict
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 from io import BytesIO, StringIO
+import requests
 
 from .models.metadata_models import (
     GenerateMappingRequest,
@@ -32,6 +37,7 @@ from .services.datasource_store import DatasourceStore
 from .services.mapping_run_store import MappingRunStore
 from .services.user_store import UserStore
 from .services.audit_log_store import AuditLogStore
+from .services.sso_settings_store import SsoSettingsStore
 
 
 app = FastAPI(title="Data Mapping Sheet Generator (Multi-Source → Multi-Target)")
@@ -42,6 +48,19 @@ DATASOURCE_STORE = DatasourceStore()
 MAPPING_RUN_STORE = MappingRunStore()
 USER_STORE = UserStore()
 AUDIT_LOG_STORE = AuditLogStore()
+SSO_SETTINGS_STORE = SsoSettingsStore()
+SSO_STATE_CACHE: dict[str, dict[str, Any]] = {}
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:4200",
+        "http://127.0.0.1:4200",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def _sanitize_credentials(credentials: Dict[str, Any]) -> Dict[str, Any]:
@@ -250,6 +269,46 @@ def _session_user(request: Request):
     return USER_STORE.get_session_user(request.cookies.get("session_token"))
 
 
+def _sso_settings_raw() -> Dict[str, Any]:
+    return SSO_SETTINGS_STORE.get()
+
+
+def _sso_enabled() -> bool:
+    settings = _sso_settings_raw()
+    return bool(settings.get("enabled")) and bool(str(settings.get("issuer_url", "")).strip()) and bool(
+        str(settings.get("client_id", "")).strip()
+    )
+
+
+def _sso_endpoints(settings: Dict[str, Any]) -> Dict[str, str]:
+    issuer = str(settings.get("issuer_url", "")).strip().rstrip("/")
+    return {
+        "authorize": f"{issuer}/v1/authorize",
+        "token": f"{issuer}/v1/token",
+        "userinfo": f"{issuer}/v1/userinfo",
+    }
+
+
+def _prune_sso_state_cache() -> None:
+    now = datetime.utcnow()
+    expired = [k for k, v in SSO_STATE_CACHE.items() if v.get("expires_at", now) <= now]
+    for k in expired:
+        SSO_STATE_CACHE.pop(k, None)
+
+
+def _save_sso_state(state: str, next_url: str = "/dashboard") -> None:
+    _prune_sso_state_cache()
+    SSO_STATE_CACHE[state] = {
+        "next_url": next_url,
+        "expires_at": datetime.utcnow() + timedelta(minutes=10),
+    }
+
+
+def _pop_sso_state(state: str) -> Dict[str, Any] | None:
+    _prune_sso_state_cache()
+    return SSO_STATE_CACHE.pop(state, None)
+
+
 def _audit_event(
     actor: str,
     action: str,
@@ -315,6 +374,8 @@ def _login_template_response(
             "app_build": APP_BUILD,
             "error": error,
             "show_default_users": USER_STORE.seed_defaults_enabled,
+            "show_sso_login": _sso_enabled(),
+            "sso_provider": str(_sso_settings_raw().get("provider", "okta")).strip() or "okta",
         },
         status_code=status_code,
     )
@@ -638,6 +699,187 @@ async def login_submit(request: Request):
     return _auth_redirect_response(request, token, url="/dashboard")
 
 
+@app.post("/api/auth/login")
+async def api_login(request: Request):
+    if _needs_initial_admin_setup():
+        raise HTTPException(status_code=409, detail="Initial admin setup required")
+    payload = await request.json()
+    username = str(payload.get("username", "")).strip()
+    password = str(payload.get("password", ""))
+    token = USER_STORE.authenticate(username, password)
+    if not token:
+        _audit_event(
+            actor=username or "anonymous",
+            action="login",
+            details="Login failed (API).",
+            status="Failed",
+            target=username,
+        )
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    _audit_event(
+        actor=username,
+        action="login",
+        details="Login succeeded (API).",
+        status="Success",
+        target=username,
+    )
+    response = JSONResponse(
+        content={
+            "ok": True,
+            "user": USER_STORE.get_user(username),
+        }
+    )
+    response.set_cookie(
+        "session_token",
+        token,
+        httponly=True,
+        samesite="lax",
+        secure=(request.url.scheme == "https"),
+        max_age=USER_STORE.session_ttl_seconds,
+        path="/",
+    )
+    return response
+
+
+@app.post("/api/auth/logout")
+def api_logout(request: Request):
+    session_user = _session_user(request)
+    USER_STORE.logout(request.cookies.get("session_token"))
+    if session_user:
+        _audit_event(
+            actor=str(session_user.get("username", "unknown")),
+            action="logout",
+            details="User logged out (API).",
+            status="Success",
+            target=str(session_user.get("username", "")),
+        )
+    response = JSONResponse(content={"ok": True})
+    response.delete_cookie("session_token")
+    return response
+
+
+@app.get("/api/auth/me")
+def api_me(request: Request):
+    user = _session_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    profile = USER_STORE.get_user(str(user.get("username", "")))
+    return {"ok": True, "user": profile}
+
+
+@app.get("/api/auth/sso/status")
+def api_sso_status():
+    settings = _sso_settings_raw()
+    return {
+        "enabled": _sso_enabled(),
+        "provider": str(settings.get("provider", "okta")).strip() or "okta",
+    }
+
+
+@app.get("/auth/sso/login")
+def sso_login(request: Request, next: str | None = None):
+    if _needs_initial_admin_setup():
+        return RedirectResponse(url="/setup/initial-admin", status_code=302)
+    settings = _sso_settings_raw()
+    if not _sso_enabled():
+        raise HTTPException(status_code=400, detail="SSO is not enabled or not configured")
+    endpoints = _sso_endpoints(settings)
+    state = secrets.token_urlsafe(24)
+    nonce = secrets.token_urlsafe(24)
+    next_url = str(next or "/dashboard").strip() or "/dashboard"
+    _save_sso_state(state, next_url=next_url)
+
+    redirect_uri = str(settings.get("redirect_uri", "")).strip() or str(request.url_for("sso_callback"))
+    params = {
+        "client_id": str(settings.get("client_id", "")).strip(),
+        "response_type": "code",
+        "scope": str(settings.get("scopes", "openid profile email")).strip() or "openid profile email",
+        "redirect_uri": redirect_uri,
+        "state": state,
+        "nonce": nonce,
+    }
+    return RedirectResponse(url=f"{endpoints['authorize']}?{urlencode(params)}", status_code=302)
+
+
+@app.get("/auth/sso/callback")
+def sso_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
+    if error:
+        _audit_event(actor="anonymous", action="sso_login", details=f"SSO callback error: {error}", status="Failed")
+        return _login_template_response(request, error=f"SSO login failed: {error}", status_code=401)
+    if not code or not state:
+        return _login_template_response(request, error="SSO callback is missing code/state.", status_code=400)
+
+    state_payload = _pop_sso_state(state)
+    if not state_payload:
+        return _login_template_response(request, error="SSO state is invalid or expired.", status_code=400)
+
+    settings = _sso_settings_raw()
+    if not _sso_enabled():
+        return _login_template_response(request, error="SSO is disabled.", status_code=400)
+    endpoints = _sso_endpoints(settings)
+    redirect_uri = str(settings.get("redirect_uri", "")).strip() or str(request.url_for("sso_callback"))
+    token_payload = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "client_id": str(settings.get("client_id", "")).strip(),
+        "client_secret": str(settings.get("client_secret", "")).strip(),
+    }
+
+    try:
+        token_resp = requests.post(endpoints["token"], data=token_payload, timeout=15)
+        token_resp.raise_for_status()
+        token_data = token_resp.json()
+        access_token = str(token_data.get("access_token", "")).strip()
+        if not access_token:
+            raise ValueError("No access_token returned from SSO provider")
+
+        userinfo_resp = requests.get(
+            endpoints["userinfo"],
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=15,
+        )
+        userinfo_resp.raise_for_status()
+        profile = userinfo_resp.json()
+        username = (
+            str(profile.get("preferred_username", "")).strip()
+            or str(profile.get("email", "")).strip()
+            or str(profile.get("sub", "")).strip()
+        )
+        if not username:
+            raise ValueError("Unable to derive username from SSO profile")
+
+        user = USER_STORE.get_user(username)
+        if not user:
+            user = USER_STORE.upsert_sso_user(username=username, role="user")
+            _audit_event(
+                actor=username,
+                action="sso_user_provisioned",
+                details=f"Provisioned new SSO user '{username}' with default role 'user'.",
+                status="Success",
+                target=username,
+            )
+        session_token = USER_STORE.create_session_for_user(username)
+        if not session_token:
+            raise ValueError("SSO user is not active")
+        _audit_event(
+            actor=username,
+            action="sso_login",
+            details="SSO login succeeded.",
+            status="Success",
+            target=username,
+        )
+        return _auth_redirect_response(request, session_token, url=str(state_payload.get("next_url", "/dashboard")))
+    except Exception as exc:
+        _audit_event(
+            actor="anonymous",
+            action="sso_login",
+            details=f"SSO login failed: {exc}",
+            status="Failed",
+        )
+        return _login_template_response(request, error=f"SSO login failed: {exc}", status_code=401)
+
+
 @app.get("/logout")
 def logout(request: Request):
     session_user = _session_user(request)
@@ -716,6 +958,7 @@ def settings_page(request: Request):
             "user_role": user.get("role", "user"),
             "username": user.get("username", "user"),
             "can_manage_users": user.get("role") == "admin",
+            "can_manage_sso": user.get("role") == "admin",
         },
     )
 
@@ -1278,6 +1521,60 @@ def list_users(request: Request):
     return {"users": USER_STORE.list_users()}
 
 
+@app.get("/api/admin/sso-settings")
+def get_sso_settings(request: Request):
+    _require_admin_user(request)
+    return {
+        "settings": SSO_SETTINGS_STORE.sanitize(SSO_SETTINGS_STORE.get()),
+    }
+
+
+@app.put("/api/admin/sso-settings")
+async def update_sso_settings(request: Request):
+    admin = _require_admin_user(request)
+    payload = await request.json()
+    allowed_keys = {
+        "enabled",
+        "provider",
+        "issuer_url",
+        "client_id",
+        "client_secret",
+        "redirect_uri",
+        "scopes",
+    }
+    filtered: Dict[str, Any] = {}
+    for key in allowed_keys:
+        if key not in payload:
+            continue
+        val = payload.get(key)
+        if key == "enabled":
+            filtered[key] = bool(val)
+        else:
+            filtered[key] = str(val or "").strip()
+
+    current = SSO_SETTINGS_STORE.get()
+    if filtered.get("client_secret") == "***":
+        filtered.pop("client_secret", None)
+    if "client_secret" in filtered and not filtered["client_secret"]:
+        # Preserve existing secret unless explicitly changed.
+        filtered.pop("client_secret", None)
+    updated = SSO_SETTINGS_STORE.update(filtered)
+    _audit_event(
+        actor=str(admin.get("username", "admin")),
+        action="update_sso_settings",
+        details="SSO settings updated.",
+        status="Success",
+        metadata={
+            "provider": updated.get("provider", ""),
+            "enabled": bool(updated.get("enabled", False)),
+        },
+    )
+    return {
+        "settings": SSO_SETTINGS_STORE.sanitize(updated),
+        "message": "SSO settings saved.",
+    }
+
+
 @app.post("/api/admin/users")
 async def create_user(request: Request):
     admin = _require_admin_user(request)
@@ -1536,6 +1833,12 @@ def _mapping_filename(source_object: str, target_table: str) -> str:
     return f"mapping_{src}_to_{tgt}_{ts}.xlsx"
 
 
+def _mapping_filename_without_timestamp(source_object: str, target_table: str) -> str:
+    src = _safe_filename_part(source_object)
+    tgt = _safe_filename_part(target_table)
+    return f"mapping_{src}_to_{tgt}.xlsx"
+
+
 def _build_request_from_form(form_data: dict) -> GenerateMappingRequest:
     """Build GenerateMappingRequest from UI form data (all fields optional where not used)."""
     source_type = SourceType(form_data.get("source_type", "salesforce"))
@@ -1669,6 +1972,89 @@ def generate_mapping(request: GenerateMappingRequest, http_request: Request):
                 "source_type": request.source_type.value,
                 "target_type": request.target_type.value,
             },
+        )
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post(
+    "/generate-mapping/batch",
+    responses={
+        200: {
+            "content": {
+                "application/zip": {}
+            },
+            "description": "Batch generated mapping sheets as zip file",
+        }
+    },
+)
+async def generate_mapping_batch(request: Request):
+    """
+    Generate mappings for multiple source/target table pairs.
+    Expects the same payload as /generate-mapping plus:
+    - source_objects: list[str]
+    - target_tables: list[str]
+    """
+    payload = await request.json()
+    source_objects = payload.get("source_objects") or []
+    target_tables = payload.get("target_tables") or []
+    if not isinstance(source_objects, list) or not isinstance(target_tables, list):
+        raise HTTPException(status_code=400, detail="source_objects and target_tables must be arrays")
+    source_objects = [str(x).strip() for x in source_objects if str(x).strip()]
+    target_tables = [str(x).strip() for x in target_tables if str(x).strip()]
+    if not source_objects or not target_tables:
+        raise HTTPException(status_code=400, detail="At least one source/target table pair is required")
+    if len(source_objects) != len(target_tables):
+        raise HTTPException(status_code=400, detail="source_objects and target_tables must have the same count")
+
+    session_user = _require_session_user(request)
+    username = str(session_user.get("username", "system"))
+    excel_generator = ExcelGenerator()
+    zip_buffer = BytesIO()
+    generated_names: list[str] = []
+    pair_count = 0
+
+    try:
+        with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for idx, (source_obj, target_tbl) in enumerate(zip(source_objects, target_tables), start=1):
+                pair_payload = dict(payload)
+                pair_payload["source_object"] = source_obj
+                pair_payload["target_table"] = target_tbl
+                pair_payload.pop("source_objects", None)
+                pair_payload.pop("target_tables", None)
+                pair_payload["preview"] = False
+                gen_request = GenerateMappingRequest(**pair_payload)
+                mapping_df = _build_mapping_dataframe(gen_request)
+                _record_mapping_run(gen_request, username, mapping_df, status="Completed")
+                excel_bytes = excel_generator.to_excel_bytes(mapping_df)
+                file_name = _mapping_filename_without_timestamp(source_obj, target_tbl)
+                # Preserve all files even when names collide across pairs.
+                zip_name = f"{idx:02d}_{file_name}"
+                zf.writestr(zip_name, excel_bytes)
+                generated_names.append(zip_name)
+                pair_count += 1
+
+        _audit_event(
+            actor=str(username),
+            action="generate_mapping_batch",
+            details=f"Batch mapping generated for {pair_count} table pairs.",
+            status="Success",
+            metadata={"files": generated_names},
+        )
+        zip_buffer.seek(0)
+        zip_filename = f"mapping_batch_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.zip"
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'},
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        _audit_event(
+            actor=str(username),
+            action="generate_mapping_batch",
+            details=f"Batch mapping generation failed: {exc}",
+            status="Failed",
         )
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
